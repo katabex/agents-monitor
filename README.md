@@ -120,4 +120,6 @@ regenerable from upstream with the `jq` rename (`id`, `name`, `author`,
 
 ## License
 
-MIT — upstream Omarchy code plus original collector and runner scripts.
+MIT — upstream Omarchy code (© David Heinemeier Hansson,
+[Omarchy](https://omarchy.org)) plus original collector and runner
+scripts (© Katabex).
