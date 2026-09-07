@@ -74,6 +74,14 @@ every 5 minutes and keeps the record fresh when the shell is not running or
 the plugin is uninstalled. The overlap is idempotent (atomic writes, same
 record shape).
 
+`install.sh` also ships and enables the sibling
+`omarchy-opencode-usage.timer` (same 1-min boot / 5-min active cadence,
+30 s accuracy) so `opencode.json` stays equally fresh. It runs the
+collector straight from the installed plugin directory — no second copy to
+keep in sync — and `uninstall.sh` stops and removes it, unlike the pi
+timer, which survives uninstall by design (so the pi tab keeps feeding the
+stock widget).
+
 The whole live-agents view (cards, bar badge, quick probe) was removed on
 2026-09-07; nothing in the plugin reads or writes
 `~/.local/state/omarchy/agents-monitor/` anymore.

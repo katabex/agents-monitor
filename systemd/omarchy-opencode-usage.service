@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenCode agent usage collector for the Agents Monitor panel
+# Keeps ~/.local/state/omarchy/agents/usage/opencode.json fresh between
+# panel refreshes (default 900 s) and while the shell is down. Runs the
+# collector from the installed plugin; install.sh deploys this unit and
+# uninstall.sh removes it.
+
+[Service]
+Type=oneshot
+ExecStart=%h/.config/omarchy/plugins/ptr.agents-monitor/bin/omarchy-agent-usage-opencode --write

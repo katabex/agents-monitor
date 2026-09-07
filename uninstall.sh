@@ -10,6 +10,11 @@ DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
 omarchy plugin disable ptr.agents-monitor 2>/dev/null || true
 omarchy plugin enable omarchy.agents --after omarchy.tailscale
 
+# OpenCode usage timer: off with the plugin (its collector lives in it).
+systemctl --user disable --now omarchy-opencode-usage.timer 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/omarchy-opencode-usage.service" \
+      "$HOME/.config/systemd/user/omarchy-opencode-usage.timer"
+
 # Legacy cleanup for installs ≤ v0.1.0: the live-agents timer no longer
 # ships with the plugin.
 systemctl --user disable --now omarchy-agents-monitor-live.timer 2>/dev/null || true
