@@ -59,3 +59,14 @@ README cover this).
   stock height cap back; bar badge still shows the live count while an
   agent is running; `systemctl --user list-timers` no longer lists the
   live timer.
+
+## Addendum (same day, later session)
+
+The bar count badge was removed as well, at the user's request. With no
+consumer left, the whole live pipeline went: `LiveAgents.qml` (probe +
+live.json + activeCount), `bin/agents-monitor-live`, the badge block, and
+the badge-source block in `Panel.qml`. `Panel.qml` is now byte-identical to
+upstream (verified by diff against
+`/usr/share/omarchy/shell/plugins/agents/`); the only QML fork left is the
+two-line `Main.qml` runner patch. `~/.local/state/omarchy/agents-monitor/`
+is no longer read or written and can be deleted.

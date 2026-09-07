@@ -315,12 +315,6 @@ Panel {
     settings: root.settings
   }
 
-  // agents-monitor:live-agents begin (badge source)
-  // Data-only instance: runs the 15 s quick probe and derives the live
-  // agent count; the count badge below binds to it. No UI of its own.
-  LiveAgents { id: liveAgents }
-  // agents-monitor:live-agents end
-
   // Cheap enough to keep running: it only re-evaluates text bindings, and a
   // stale "resets in 2h" on a panel that is open is worse than a timer.
   Timer {
@@ -353,35 +347,6 @@ Panel {
       else root.toggle()
     }
   }
-
-  // agents-monitor:live-agents begin (badge)
-  // Count pill while any local agent (pi/claude/codex) is running; hidden
-  // at zero so the bar looks exactly like stock when nothing is active.
-  Rectangle {
-    id: liveBadge
-    visible: liveAgents.ready && liveAgents.activeCount > 0
-    z: 10
-    anchors.top: button.top
-    anchors.right: button.right
-    anchors.topMargin: Style.space(1)
-    anchors.rightMargin: Style.space(1)
-    width: liveBadgeText.implicitWidth + Style.space(9)
-    height: Style.space(15)
-    radius: height / 2
-    color: liveAgents.activeColor
-
-    Text {
-      id: liveBadgeText
-      anchors.centerIn: parent
-      textFormat: Text.PlainText
-      text: liveAgents.activeCount
-      color: "#101218"
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.caption
-      font.bold: true
-    }
-  }
-  // agents-monitor:live-agents end
 
   KeyboardPanel {
     id: panel

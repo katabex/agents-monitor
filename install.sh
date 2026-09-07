@@ -41,5 +41,3 @@ omarchy plugin enable ptr.agents-monitor --after omarchy.tailscale
 omarchy restart shell
 
 echo "==> Installed and shell restarted."
-echo "    omarchy-pi-usage.timer left enabled by design."
-echo "    The bar badge lights up within ~15 s while any agent is running."

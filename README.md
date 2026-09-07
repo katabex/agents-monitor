@@ -53,15 +53,6 @@ config directory.
   (claude/codex/fireworks, honoring `--force`, `--limits-only`, `--except`,
   and agent-id filters) and runs the pi collector under the same rules, so
   all enabled providers refresh together.
-- `bin/agents-monitor-live` — live session scanner (pi, Claude Code,
-  Codex). Quick scan only, driven every 15 s by the bar widget's QML probe;
-  writes `~/.local/state/omarchy/agents-monitor/live.json`, which feeds the
-  bar count badge. Data contract:
-  `docs/superpowers/specs/2026-09-06-live-agents-design.md`
-- `LiveAgents.qml` — data-only: the quick probe and the derived live count
-  the bar badge shows. No panel UI of its own (the LIVE / BY PROJECT cards
-  were removed 2026-09-07); `Panel.qml` carries two marked insertion blocks
-  for it
 - `Main.qml` differs from upstream in exactly two lines: the resolved path of
   the bundled runner, and the command that uses it
 
@@ -75,15 +66,15 @@ every 5 minutes and keeps the record fresh when the shell is not running or
 the plugin is uninstalled. The overlap is idempotent (atomic writes, same
 record shape).
 
-The bar badge's live data comes from the 15-second quick probe, which only
-runs while the shell is up (the bar widget drives it) — no timer involved.
+The whole live-agents view (cards, bar badge, quick probe) was removed on
+2026-09-07; nothing in the plugin reads or writes
+`~/.local/state/omarchy/agents-monitor/` anymore.
 
-Upgrading from ≤ v0.1.0? The 5-minute `omarchy-agents-monitor-live.timer`
-no longer ships: `./uninstall.sh` removes it, or disable it manually with
-`systemctl --user disable --now omarchy-agents-monitor-live.timer` and
-delete `~/.config/systemd/user/omarchy-agents-monitor-live.*`. Uninstalling
-leaves `~/.local/state/omarchy/agents-monitor/` behind — harmless
-leftovers, delete manually if you want them gone.
+Upgrading from an older install? `./uninstall.sh` removes the obsolete
+`omarchy-agents-monitor-live` systemd units, or disable them manually
+(`systemctl --user disable --now omarchy-agents-monitor-live.timer`, then
+delete `~/.config/systemd/user/omarchy-agents-monitor-live.*`). The stale
+state dir `~/.local/state/omarchy/agents-monitor/` can be deleted too.
 
 ## Deploying changes
 
@@ -91,7 +82,7 @@ Re-run `./install.sh`. It ends with `omarchy restart shell` because the
 shell's "Local plugin changed, reloading" path re-instantiates **cached**
 QML components — changed QML does not take effect on hot-reload alone
 (verified with a line-shift canary, 2026-09-06). Data-file changes
-(`pi.json`, `live.json`) of course apply without any restart.
+(`pi.json`) of course applies without any restart.
 
 ## Re-syncing with upstream
 
@@ -105,12 +96,10 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 ```
 
 Copy upstream changes in, then re-apply the two-line `Main.qml` patch
-(`updateBin` property + `updateCommand` first element) **and** the two
-`// agents-monitor:live-agents begin/end` marked blocks in `Panel.qml`
-(the `LiveAgents` data instance after `Main { id: usage }`, and the count
-badge after the `BarIconButton`). Everything else the fork adds lives in
-files upstream does not have (`LiveAgents.qml`, the `bin/` tree), which
-cannot conflict. The manifest is
+(`updateBin` property + `updateCommand` first element) — `Panel.qml` is
+byte-identical to upstream again. Everything else the fork adds lives in
+files upstream does not have (the `bin/` tree), which cannot conflict. The
+manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,
 `description`, `displayName`, `aliases`, `providers.pi`,
 `omarchy.clonedFrom`).
