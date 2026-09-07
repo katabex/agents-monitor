@@ -4,8 +4,9 @@
 # Called by the panel with the same arguments the stock widget would pass to
 # omarchy-agent-usage-update (--force, --limits-only, --except <id>, and/or a
 # list of agent ids). Forwards them to the stock updater (claude, codex,
-# fireworks) and runs the bundled pi collector under the same rules, so all
-# enabled providers refresh together on the panel's timer and refresh button.
+# fireworks) and runs the bundled pi and opencode collectors under the same
+# rules, so all enabled providers refresh together on the panel's timer and
+# refresh button.
 #
 # The external omarchy-pi-usage.timer (option 2) keeps refreshing pi.json
 # between panel refreshes; it is redundant by design, not by accident.
@@ -34,17 +35,20 @@ done
 omarchy-agent-usage-update ${flags[@]+"${flags[@]}"} ${only[@]+"${only[@]}"} \
   $(for id in "${!excluded[@]}"; do printf -- '--except %q ' "$id"; done) || true
 
-# pi: same inclusion rules as the stock updater applies to its agents.
-run_pi=1
-if [[ -n ${excluded[pi]:-} ]]; then
-  run_pi=0
-elif (( ${#only[@]} > 0 )); then
-  run_pi=0
-  for id in "${only[@]}"; do
-    [[ $id == "pi" ]] && run_pi=1
-  done
-fi
+# Bundled local collectors (pi, opencode): same inclusion rules as the
+# stock updater applies to its agents.
+for agent in pi opencode; do
+  run=1
+  if [[ -n ${excluded[$agent]:-} ]]; then
+    run=0
+  elif (( ${#only[@]} > 0 )); then
+    run=0
+    for id in "${only[@]}"; do
+      [[ $id == "$agent" ]] && run=1
+    done
+  fi
 
-if (( run_pi )) && [[ " ${flags[*]:-} " != *" --limits-only "* ]]; then
-  "$script_dir/omarchy-agent-usage-pi" --write >/dev/null || true
-fi
+  if (( run )) && [[ " ${flags[*]:-} " != *" --limits-only "* ]]; then
+    "$script_dir/omarchy-agent-usage-$agent" --write >/dev/null || true
+  fi
+done

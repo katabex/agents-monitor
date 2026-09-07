@@ -1,11 +1,11 @@
 # Agents Monitor
 
 An [Omarchy](https://omarchy.org) shell plugin: **Claude Code, Codex,
-Fireworks, and pi** usage, limits, and pace in one bar panel.
+Fireworks, pi, and OpenCode** usage, limits, and pace in one bar panel.
 
 Fork of the stock `omarchy.agents` widget (MIT) with built-in **pi agent**
-collection — the provider the stock panel does not show. When installed it
-replaces the stock widget on the bar.
+and **OpenCode** collection — providers the stock panel does not show. When
+installed it replaces the stock widget on the bar.
 
 ## What it adds over stock
 
@@ -14,7 +14,8 @@ replaces the stock widget on the bar.
 | claude | Anthropic OAuth usage endpoint | as stock |
 | codex | Codex app-server RPC | as stock |
 | fireworks | prepaid balance estimate | as stock |
-| **pi** | — (local stats only) | `~/.pi/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
+| **pi** | — (local stats only) | `~/.pi/agent/sessions` + `~/.omp/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
+| **opencode** | — (local stats only) | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
 
 Everything else — the panel UI, per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged.
@@ -43,16 +44,23 @@ restarts the shell — changed QML needs it (see "Deploying changes").
 Restores the stock `omarchy.agents` widget and removes the plugin from the
 config directory.
 
-## How pi collection works
+## How bundled collection works
 
-- `bin/omarchy-agent-usage-pi` — Python collector; scans pi session JSONL for
-  assistant messages from providers no stock collector claims, writes the
-  record contract to `~/.local/state/omarchy/agents/usage/pi.json`
+- `bin/omarchy-agent-usage-pi` — Python collector; scans pi/omp session
+  JSONL for assistant messages from providers no stock collector claims,
+  writes the record contract to `~/.local/state/omarchy/agents/usage/pi.json`
+- `bin/omarchy-agent-usage-opencode` — Python collector; reads OpenCode's
+  SQLite store `~/.local/share/opencode/opencode.db` read-only (the legacy
+  `storage/` JSON tree is fully migrated into it) and counts every
+  assistant message with tokens, writing the same contract to
+  `usage/opencode.json`. Token mapping: input ← `tokens.input`, output ←
+  `tokens.output` + `tokens.reasoning`, cache read/write ←
+  `tokens.cache.{read,write}` — the sum equals OpenCode's `tokens.total`
 - `bin/agents-monitor-update` — refresh runner; the panel calls this instead
   of `omarchy-agent-usage-update` directly. Forwards to the stock updater
   (claude/codex/fireworks, honoring `--force`, `--limits-only`, `--except`,
-  and agent-id filters) and runs the pi collector under the same rules, so
-  all enabled providers refresh together.
+  and agent-id filters) and runs both bundled collectors under the same
+  rules, so all enabled providers refresh together.
 - `Main.qml` differs from upstream in exactly two lines: the resolved path of
   the bundled runner, and the command that uses it
 

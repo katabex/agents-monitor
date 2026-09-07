@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "ptr",
   "license": "MIT",
-  "description": "Claude Code, Codex, Fireworks, and pi usage, limits, and pace in an Omarchy bar panel. Fork of the stock omarchy.agents widget with built-in pi collection.",
+  "description": "Claude Code, Codex, Fireworks, pi, and OpenCode usage, limits, and pace in an Omarchy bar panel. Fork of the stock omarchy.agents widget with built-in pi and OpenCode collection.",
   "kinds": [
     "bar-widget"
   ],
@@ -35,6 +35,9 @@
           "enabled": true
         },
         "pi": {
+          "enabled": true
+        },
+        "opencode": {
           "enabled": true
         }
       },

@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""OpenCode agent usage collector for the Agents Monitor panel.
+
+Prints (or, with --write, atomically writes) the record contract that
+~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
+bundled pi collector emit.
+
+Source of truth is OpenCode's SQLite store,
+~/.local/share/opencode/opencode.db (read-only access): the legacy
+storage/ JSON tree is fully migrated into it (verified 2026-09-07: all 218
+legacy message ids present in the db). Every assistant message with a
+non-zero token count is counted — no exclusions. The stock Claude/Codex
+collectors scan ~/.claude and ~/.codex and never touch OpenCode's db, so
+unlike the pi collector there is no double-count coupling to track.
+
+Token mapping into the Claude-shaped buckets the panel expects:
+input ← tokens.input, output ← tokens.output + tokens.reasoning (OpenCode
+splits reasoning out; Claude's output_tokens includes thinking),
+cacheRead ← tokens.cache.read, cacheWrite ← tokens.cache.write. The sum
+matches OpenCode's own tokens.total.
+
+Local stats only: OpenCode has no rate-limit endpoint the panel knows, so
+limits stay empty and the tab shows tokens by day and by model.
+"""
+
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+DB_PATH = Path.home() / ".local" / "share" / "opencode" / "opencode.db"
+
+
+def local_day(ms):
+    """Local calendar date for epoch milliseconds; None when unparseable
+    (the caller falls back to the row's time_created column)."""
+    try:
+        return datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def number(value):
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return int(n) if n > 0 else 0
+
+
+def counted_tokens(tokens):
+    """(input, output_incl_reasoning, cache_read, cache_write) for one
+    assistant message's tokens object; all zeros means nothing to count.
+    A message that only reports `total` still counts as that total."""
+    tokens = tokens or {}
+    cache = tokens.get("cache") or {}
+    input_t = number(tokens.get("input"))
+    output_t = number(tokens.get("output")) + number(tokens.get("reasoning"))
+    read_t = number(cache.get("read"))
+    write_t = number(cache.get("write"))
+    if not (input_t or output_t or read_t or write_t):
+        total = number(tokens.get("total"))
+        if total:
+            return total, 0, 0, 0
+        return 0, 0, 0, 0
+    return input_t, output_t, read_t, write_t
+
+
+def scan():
+    today = datetime.now().strftime("%Y-%m-%d")
+    recent_dates = []
+    for offset in range(6, -1, -1):
+        recent_dates.append(
+            datetime.fromordinal(datetime.now().toordinal() - offset).strftime("%Y-%m-%d")
+        )
+    recent = {d: {"date": d, "messageCount": 0} for d in recent_dates}
+
+    active_days = set()
+    sessions = set()
+    today_sessions = set()
+    today_tokens = {}
+    today_prompts = 0
+    today_total = 0
+    total_prompts = 0
+    usage_by_model = {}
+
+    if DB_PATH.is_file():
+        # mode=ro never takes a write lock, so a running OpenCode (WAL
+        # writer) is never blocked and we never create the db by accident.
+        connection = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        try:
+            rows = connection.execute(
+                "select session_id, data, time_created from message"
+                " where json_extract(data, '$.role') = 'assistant'"
+                " order by time_created"
+            )
+            for session_id, raw, time_created in rows:
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue  # torn write mid-line; WAL keeps rows whole
+                input_t, output_t, read_t, write_t = counted_tokens(data.get("tokens"))
+                total = input_t + output_t + read_t + write_t
+                if not total:
+                    continue
+
+                time_obj = data.get("time") or {}
+                day = local_day(time_obj.get("created"))
+                if day is None:
+                    day = local_day(time_created)
+                if day is None:
+                    day = today
+
+                model = str(data.get("modelID") or "") or "unknown"
+
+                total_prompts += 1
+                sessions.add(session_id)
+                active_days.add(day)
+
+                bucket = usage_by_model.setdefault(model, {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "cacheReadInputTokens": 0,
+                    "cacheCreationInputTokens": 0,
+                })
+                bucket["inputTokens"] += input_t
+                bucket["outputTokens"] += output_t
+                bucket["cacheReadInputTokens"] += read_t
+                bucket["cacheCreationInputTokens"] += write_t
+
+                if day in recent:
+                    recent[day]["messageCount"] += total
+                if day == today:
+                    today_prompts += 1
+                    today_sessions.add(session_id)
+                    today_total += total
+                    today_tokens[model] = today_tokens.get(model, 0) + total
+        finally:
+            connection.close()
+
+    return {
+        "schemaVersion": 1,
+        "id": "opencode",
+        "name": "OpenCode",
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "ready": True,
+        "hasLocalStats": total_prompts > 0,
+        "tierLabel": "local stats",
+        "limits": [],
+        "usageStatusText": "",
+        "authHelpText": "",
+        "todayPrompts": today_prompts,
+        "todaySessions": len(today_sessions),
+        "todayTotalTokens": today_total,
+        "todayTokensByModel": today_tokens,
+        "recentDays": [recent[d] for d in recent_dates],
+        "totalPrompts": total_prompts,
+        "totalSessions": len(sessions),
+        "activeDays": len(active_days),
+        "activeDates": sorted(d for d in active_days if d),
+        "modelUsage": usage_by_model,
+    }
+
+
+def write_record(record):
+    USAGE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".opencode.", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, str(USAGE_DIR / "opencode.json"))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    record = scan()
+    if "--write" in sys.argv[1:]:
+        write_record(record)
+        print(f"wrote {USAGE_DIR / 'opencode.json'}")
+    else:
+        json.dump(record, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+
+
+if __name__ == "__main__":
+    main()
