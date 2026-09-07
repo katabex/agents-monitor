@@ -315,6 +315,12 @@ Panel {
     settings: root.settings
   }
 
+  // agents-monitor:live-agents begin (badge source)
+  // Data-only instance: runs the 15 s quick probe and derives the live
+  // agent count; the count badge below binds to it. No UI of its own.
+  LiveAgents { id: liveAgents }
+  // agents-monitor:live-agents end
+
   // Cheap enough to keep running: it only re-evaluates text bindings, and a
   // stale "resets in 2h" on a panel that is open is worse than a timer.
   Timer {
@@ -387,11 +393,7 @@ Panel {
     contentWidth: panel.fittedContentWidth(Style.space(380))
     // Taller than the control panels on purpose: this one is a dashboard, and
     // the whole point is reading limits and history without scrolling.
-    // agents-monitor:live-agents — no 640 cap: the live cards pushed the
-    // column past it, so the panel now sizes to its content and only the
-    // screen (availableCardHeight) limits it. Scroll returns only when the
-    // screen truly cannot fit the dashboard.
-    contentHeight: panel.fittedContentHeight(column.implicitHeight)
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -426,20 +428,6 @@ Panel {
           id: column
           width: panelFlick.width
           spacing: Style.space(12)
-
-          // agents-monitor:live-agents begin (cards)
-          // Merged live view above everything: what is running now comes
-          // first, per-provider detail after. Collapses to nothing when the
-          // live files are absent or stale, restoring stock appearance.
-          LiveAgents {
-            id: liveAgents
-            width: parent.width
-            visible: ready && visibleSessions.length > 0
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            formatTokens: usage.formatTokenCount
-          }
-          // agents-monitor:live-agents end
 
           // ---------- Hero: provider mark · name · plan ----------
           PanelHero {

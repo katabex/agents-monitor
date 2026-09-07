@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Live agent sessions for the Agents Monitor panel.
+"""Live agent sessions for the Agents Monitor bar badge.
 
-Two modes, two output files (spec: docs/superpowers/specs/2026-09-06-live-agents-design.md):
-
-  --quick (default)  directory listings + file stats + head/tail peeks only.
-                     Writes live.json. Driven every 15 s by the bar widget's
-                     QML probe, so the badge feels live.
-  --full             everything quick does, plus whole-file parsing for
-                     per-project token totals. Also writes projects.json.
-                     Driven by the 5-minute systemd timer and the panel
-                     refresh runner.
+Quick scan only — directory listings + file stats + head/tail peeks, never
+whole-file parses. Writes live.json, which the bar widget's QML probe
+re-reads every 15 s to derive the badge count (data contract:
+docs/superpowers/specs/2026-09-06-live-agents-design.md; the panel cards
+and the projects.json/--full machinery were removed 2026-09-07).
 
 Providers with local session logs: pi, Claude Code, Codex. Fireworks has no
 local sessions (billing API only) and is deliberately absent.
@@ -65,26 +61,6 @@ def context_window_for(model, override=None):
 
 def local_date(ts):
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
-
-
-def local_day_of(value):
-    """Local calendar date for an ISO timestamp string or epoch seconds;
-    None when unparseable (the caller treats that as not-today)."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return local_date(value)
-    text = str(value)
-    try:
-        if text.endswith("Z"):
-            dt = datetime.fromisoformat(text[:-1] + "+00:00")
-        else:
-            dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is not None:
-        dt = dt.astimezone()
-    return dt.strftime("%Y-%m-%d")
 
 
 def iso_utc(ts):
@@ -372,71 +348,6 @@ def scan_live(root, home):
     return record, errors
 
 
-# ------------------------------------------------------------------ full mode
-
-def full_session_tokens(path, provider, today):
-    """Token totals for the project breakdown, restricted to today's local
-    calendar day. Codex rollout files are date-partitioned (one file per
-    day) and report cumulative counters, so the last token_count wins
-    instead of summing; pi/claude sessions can span midnight, so their
-    messages are filtered by timestamp — otherwise a four-day session
-    touched once today would attribute its whole life to TODAY."""
-    tokens = 0
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if provider == "codex":
-                found = codex_token_usage(entry)
-                if found is not None:
-                    tokens = found[0]
-                continue
-            usage = find_usage_entry(entry)
-            if usage is None:
-                continue
-            if local_day_of(entry.get("timestamp")) != today:
-                continue
-            tokens += usage_sum(usage)
-    return tokens
-
-
-def scan_projects(root, home, live):
-    projects = {}
-    by_path = {}
-    today = local_date(datetime.now().timestamp())
-    for provider, path, fallback in sessions_active_today(root, home):
-        by_path[str(path)] = (provider, fallback)
-    for path_str, (provider, fallback) in by_path.items():
-        path = Path(path_str)
-        row = next(
-            (s for s in live["sessions"]
-             if s["provider"] == provider and s["lastActivity"] == iso_mtime(path)),
-            None,
-        )
-        project = row["project"] if row else project_display(fallback, home) or path.stem
-        try:
-            tokens = full_session_tokens(path, provider, today)
-        except Exception:  # noqa: BLE001 — one bad file never kills the scan
-            continue
-        if tokens <= 0:
-            continue
-        bucket = projects.setdefault(project, {"project": project, "providers": {}, "total": 0})
-        bucket["providers"][provider] = bucket["providers"].get(provider, 0) + tokens
-        bucket["total"] += tokens
-    ordered = sorted(projects.values(), key=lambda p: p["total"], reverse=True)
-    return {
-        "schemaVersion": 1,
-        "computedAt": datetime.now(timezone.utc).isoformat(),
-        "window": "today",
-        "projects": ordered,
-    }
-
-
 # ---------------------------------------------------------------------- main
 
 def atomic_write(directory, name, payload):
@@ -458,7 +369,6 @@ def atomic_write(directory, name, payload):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--quick", action="store_true", help="fast probe (default)")
-    parser.add_argument("--full", action="store_true", help="also compute per-project totals")
     parser.add_argument("--root", default=None, help="override HOME (tests)")
     args = parser.parse_args()
 
@@ -479,11 +389,6 @@ def main():
 
     atomic_write(state_dir, "live.json", live)
     print(f"wrote {state_dir / 'live.json'}")
-
-    if args.full:
-        projects = scan_projects(root, home, live)
-        atomic_write(state_dir, "projects.json", projects)
-        print(f"wrote {state_dir / 'projects.json'}")
 
 
 if __name__ == "__main__":

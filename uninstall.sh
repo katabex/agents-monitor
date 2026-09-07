@@ -10,7 +10,8 @@ DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
 omarchy plugin disable ptr.agents-monitor 2>/dev/null || true
 omarchy plugin enable omarchy.agents --after omarchy.tailscale
 
-# Live agents timer: off with the plugin.
+# Legacy cleanup for installs ≤ v0.1.0: the live-agents timer no longer
+# ships with the plugin.
 systemctl --user disable --now omarchy-agents-monitor-live.timer 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/omarchy-agents-monitor-live.service" \
       "$HOME/.config/systemd/user/omarchy-agents-monitor-live.timer"

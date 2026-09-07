@@ -2,8 +2,8 @@
 # Install Agents Monitor: copy into ~/.config/omarchy/plugins and replace the
 # stock omarchy.agents widget on the bar.
 #
-#   ./install.sh    # copy + validate + timer + shell restart (re-run any
-#                   # time to deploy repo changes)
+#   ./install.sh    # copy + validate + shell restart (re-run any time to
+#                   # deploy repo changes)
 #
 # Symlinks are rejected by omarchy-plugin-validate, so the install is a copy;
 # the repo in ~/Repos/ktbx/agents-monitor stays the source of truth.
@@ -35,16 +35,6 @@ omarchy plugin validate "$DEST"
 # (right section, between omarchy.tailscale and omarchy.bluetooth).
 omarchy plugin disable omarchy.agents
 omarchy plugin enable ptr.agents-monitor --after omarchy.tailscale
-
-# Live agents view: 5-minute full scans between panel refreshes and while
-# the shell is down. (The 15-second quick probe is driven by the bar widget
-# itself, so it needs no unit.)
-mkdir -p "$HOME/.config/systemd/user"
-cp "$SRC/systemd/omarchy-agents-monitor-live.service" \
-   "$SRC/systemd/omarchy-agents-monitor-live.timer" \
-   "$HOME/.config/systemd/user/"
-systemctl --user daemon-reload
-systemctl --user enable --now omarchy-agents-monitor-live.timer
 
 # QML changes need a shell restart: the hot-reload path serves cached
 # components (see header comment).

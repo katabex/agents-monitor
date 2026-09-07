@@ -28,12 +28,11 @@ sync, settings schema — is the stock widget, unchanged.
 Copies the plugin into `~/.config/omarchy/plugins/ptr.agents-monitor`
 (`omarchy-plugin-validate` rejects symlinked plugin folders, so the repo in
 `~/Repos/ktbx/agents-monitor` stays the source of truth — re-run
-`install.sh` any time to deploy repo changes; the shell hot-reloads files
-that change under its plugins dir).
+`install.sh` any time to deploy repo changes).
 
 `install.sh` disables `omarchy.agents`, puts `ptr.agents-monitor` in its bar
-slot (right section, after `omarchy.tailscale`), and validates the manifest.
-No restart needed.
+slot (right section, after `omarchy.tailscale`), validates the manifest, and
+restarts the shell — changed QML needs it (see "Deploying changes").
 
 ## Uninstall
 
@@ -53,17 +52,16 @@ config directory.
   of `omarchy-agent-usage-update` directly. Forwards to the stock updater
   (claude/codex/fireworks, honoring `--force`, `--limits-only`, `--except`,
   and agent-id filters) and runs the pi collector under the same rules, so
-  all enabled providers refresh together. Also runs the live scanner
-  (`--full`) — provider-independent, skipped only by `--limits-only`
+  all enabled providers refresh together.
 - `bin/agents-monitor-live` — live session scanner (pi, Claude Code,
-  Codex). `--quick` (15 s, driven by the bar widget's QML probe) writes
-  `~/.local/state/omarchy/agents-monitor/live.json`; `--full` (5-minute
-  systemd timer + every panel refresh) also writes `projects.json` with
-  per-project token totals for today. Design:
+  Codex). Quick scan only, driven every 15 s by the bar widget's QML probe;
+  writes `~/.local/state/omarchy/agents-monitor/live.json`, which feeds the
+  bar count badge. Data contract:
   `docs/superpowers/specs/2026-09-06-live-agents-design.md`
-- `LiveAgents.qml` — the LIVE · ALL AGENTS and BY PROJECT cards above the
-  provider tabs, the bar count badge, and the quick probe. All new UI
-  lives here; `Panel.qml` only carries two marked insertion blocks
+- `LiveAgents.qml` — data-only: the quick probe and the derived live count
+  the bar badge shows. No panel UI of its own (the LIVE / BY PROJECT cards
+  were removed 2026-09-07); `Panel.qml` carries two marked insertion blocks
+  for it
 - `Main.qml` differs from upstream in exactly two lines: the resolved path of
   the bundled runner, and the command that uses it
 
@@ -77,14 +75,15 @@ every 5 minutes and keeps the record fresh when the shell is not running or
 the plugin is uninstalled. The overlap is idempotent (atomic writes, same
 record shape).
 
-`install.sh` also installs and enables the sibling
-`omarchy-agents-monitor-live.timer` (same 5-minute cadence) so
-`live.json`/`projects.json` stay fresh between panel refreshes and while
-the shell is down; `uninstall.sh` stops and removes it. Uninstalling leaves
-`~/.local/state/omarchy/agents-monitor/` behind — harmless leftovers,
-delete manually if you want it gone. The 15-second quick probe only runs
-while the shell is up (the bar widget drives it); its atomic writes make
-the timer overlap safe.
+The bar badge's live data comes from the 15-second quick probe, which only
+runs while the shell is up (the bar widget drives it) — no timer involved.
+
+Upgrading from ≤ v0.1.0? The 5-minute `omarchy-agents-monitor-live.timer`
+no longer ships: `./uninstall.sh` removes it, or disable it manually with
+`systemctl --user disable --now omarchy-agents-monitor-live.timer` and
+delete `~/.config/systemd/user/omarchy-agents-monitor-live.*`. Uninstalling
+leaves `~/.local/state/omarchy/agents-monitor/` behind — harmless
+leftovers, delete manually if you want them gone.
 
 ## Deploying changes
 
@@ -108,12 +107,10 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 Copy upstream changes in, then re-apply the two-line `Main.qml` patch
 (`updateBin` property + `updateCommand` first element) **and** the two
 `// agents-monitor:live-agents begin/end` marked blocks in `Panel.qml`
-(the cards at the top of the panel Column, the badge after the
-`BarIconButton`), **and** the one-line height-cap change in `Panel.qml`
-(`fittedContentHeight(column.implicitHeight)` without the `Style.space(640)`
-cap — panel sizes to content instead of scrolling). Everything else the
-fork adds lives in files upstream does not have (`LiveAgents.qml`, the
-bin/ and systemd/ trees), which cannot conflict. The manifest is
+(the `LiveAgents` data instance after `Main { id: usage }`, and the count
+badge after the `BarIconButton`). Everything else the fork adds lives in
+files upstream does not have (`LiveAgents.qml`, the `bin/` tree), which
+cannot conflict. The manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,
 `description`, `displayName`, `aliases`, `providers.pi`,
 `omarchy.clonedFrom`).

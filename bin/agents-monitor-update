@@ -48,9 +48,3 @@ fi
 if (( run_pi )) && [[ " ${flags[*]:-} " != *" --limits-only "* ]]; then
   "$script_dir/omarchy-agent-usage-pi" --write >/dev/null || true
 fi
-
-# Live agents (--full: live.json + projects.json). Provider-independent, so
-# it runs even when specific agents are excluded; only --limits-only skips it.
-if [[ " ${flags[*]:-} " != *" --limits-only "* ]]; then
-  "$script_dir/agents-monitor-live" --full >/dev/null || true
-fi
