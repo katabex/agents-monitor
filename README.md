@@ -26,7 +26,9 @@ SUBSCRIPTION card (one tab per thing you pay for, named by company:
 Anthropic, OpenAI, z.ai, OpenRouter, Fireworks — balance + limit meters)
 and an AGENT card (one tab per thing that runs: Claude Code, Codex,
 OpenCode, pi, plus account-scoped analytics tabs), each switching
-independently. Strips size tabs to their name text and grow the panel to
+independently. The subscription card's header carries the selected
+service's mark (the z.ai tab shows the OpenCode mark until the z.ai quota
+gets its own record). Strips size tabs to their name text and grow the panel to
 keep one row; the usage title names whose truth the charts tell
 (`USAGE — ACCOUNT` vs `USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent
 status box shows only when a record sets both `usageStatusText` and

@@ -521,13 +521,46 @@ Panel {
               width: parent.width - Style.space(24)
               spacing: Style.space(12)
 
-              Text {
+              Row {
                 width: parent.width
-                textFormat: Text.PlainText
-                text: "SUBSCRIPTION"
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                spacing: Style.space(8)
+
+                // The selected service's mark. Candidates (light variant
+                // first on light surfaces) restart the fallback walk only
+                // when the URLs change: provider objects are rebuilt on
+                // every refresh, and re-pointing source at a URL whose
+                // load already failed emits no statusChanged.
+                Item {
+                  id: serviceMark
+                  property var candidates: root.iconCandidatesForProvider(root.service, root.surface)
+                  property string candidatesKey: candidates.join("\n")
+                  property int candidateIndex: 0
+                  onCandidatesKeyChanged: candidateIndex = 0
+
+                  width: Style.space(18)
+                  height: Style.space(18)
+
+                  Image {
+                    anchors.fill: parent
+                    source: serviceMark.candidateIndex < serviceMark.candidates.length ? serviceMark.candidates[serviceMark.candidateIndex] : ""
+                    sourceSize.width: Style.space(36)
+                    sourceSize.height: Style.space(36)
+                    fillMode: Image.PreserveAspectFit
+                    // Advancing source from inside its own status change
+                    // trips the binding-loop detector; defer one tick.
+                    onStatusChanged: if (status === Image.Error && serviceMark.candidateIndex < serviceMark.candidates.length)
+                      Qt.callLater(function() { serviceMark.candidateIndex++ })
+                  }
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "SUBSCRIPTION"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
               }
 
               Flow {
