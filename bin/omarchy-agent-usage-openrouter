@@ -20,6 +20,19 @@ Key resolution: $OPENROUTER_API_KEY, else {"apiKey": …} in
 systemd user units do not inherit the shell environment). Without a key
 the record is printed not-ready with help text and nothing is written, so
 a previously collected record is never clobbered by an unconfigured run.
+
+Token stats (today, tokens-by-day, tokens-by-model) come from the
+Analytics API - POST /api/v1/analytics/query, which needs a MANAGEMENT
+key (Settings -> Management Keys; read-only, cannot make model requests).
+Optional "managementKey" in the same config file (or
+$OPENROUTER_MANAGEMENT_KEY). Without it the record degrades to the
+balance-only shape: credits meters work, token sections stay empty.
+Metric names are discovered from /api/v1/analytics/meta each run so an
+upstream rename degrades a metric, not the whole collector.
+
+Stats are account-scoped (scope "account", hasLocalStats false, the
+fireworks convention): they replicate the same upstream truth on every
+synced device, so the sync merge must take the max, not the sum.
 """
 
 import json
@@ -37,8 +50,20 @@ USAGE_DIR = Path(
 
 CREDITS_URL = "https://openrouter.ai/api/v1/credits"
 KEY_URL = "https://openrouter.ai/api/v1/auth/key"
+ANALYTICS_QUERY_URL = "https://openrouter.ai/api/v1/analytics/query"
+ANALYTICS_META_URL = "https://openrouter.ai/api/v1/analytics/meta"
 OPENROUTER_CONFIG = Path.home() / ".config" / "omarchy" / "agents" / "openrouter.json"
 TIMEOUT = 10.0
+ANALYTICS_WINDOW_DAYS = 7
+
+# Candidate analytics metrics mapped onto the record's Claude-shaped token
+# buckets. Rows simply omit metrics the account never used or that upstream
+# renamed; every read is a .get() with a default.
+METRIC_INPUT = "tokens_prompt"
+METRIC_OUTPUT = "tokens_completion"
+METRIC_REASONING = "tokens_reasoning"
+METRIC_CACHE_READ = "tokens_cache_read"
+METRIC_REQUESTS = "request_count"
 
 AUTH_HELP = (
     "Set OPENROUTER_API_KEY, or put {\"apiKey\": …} in "
@@ -51,14 +76,27 @@ def api_key():
     env = os.environ.get("OPENROUTER_API_KEY")
     if env:
         return env
+    return config_value("apiKey")
+
+
+def config_value(name):
     if OPENROUTER_CONFIG.is_file():
         try:
-            value = json.loads(OPENROUTER_CONFIG.read_text(encoding="utf-8")).get("apiKey")
+            value = json.loads(OPENROUTER_CONFIG.read_text(encoding="utf-8")).get(name)
         except (OSError, json.JSONDecodeError):
-            value = None
+            return ""
         if value:
             return str(value)
     return ""
+
+
+def management_key():
+    """$OPENROUTER_MANAGEMENT_KEY, else the config file; "" when absent.
+    Analytics (token stats) needs it; the balance works without."""
+    env = os.environ.get("OPENROUTER_MANAGEMENT_KEY")
+    if env:
+        return env
+    return config_value("managementKey")
 
 
 def fetch_json(url, key):
@@ -77,6 +115,145 @@ def money(value):
         return None
 
 
+def number(value):
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return int(n) if n > 0 else 0
+
+
+# ---------------------------------------------------------------- analytics
+
+
+def analytics_metrics(meta_payload):
+    """Metric list for the query. /meta is the source of truth when
+    readable: candidates missing from meta (renamed upstream, or metrics
+    an account never used) are dropped; a meta failure sends the
+    candidates as-is and fetch_analytics falls back to request_count
+    only on a 400."""
+    candidates = [
+        METRIC_REQUESTS, METRIC_INPUT, METRIC_OUTPUT,
+        METRIC_REASONING, METRIC_CACHE_READ,
+    ]
+    try:
+        known = set()
+        for metric in (meta_payload.get("data") or {}).get("metrics") or []:
+            name = metric.get("name") if isinstance(metric, dict) else metric
+            if name:
+                known.add(str(name))
+        if known:
+            return [m for m in candidates if m in known] or [METRIC_REQUESTS]
+    except (AttributeError, TypeError):
+        pass
+    return candidates
+
+
+def query_analytics(key, metrics, start, end):
+    body = json.dumps({
+        "metrics": metrics,
+        "dimensions": ["model"],
+        "granularity": "day",
+        "time_range": {"start": start, "end": end},
+        "limit": 1000,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        ANALYTICS_QUERY_URL,
+        data=body,
+        headers={
+            "Authorization": "Bearer " + key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_analytics(key, now):
+    """Rows for the last ANALYTICS_WINDOW_DAYS days grouped by day+model,
+    or None on any failure. Never raises. OpenRouter buckets days in UTC;
+    the panel's Today is local - the boundary hour can differ, the same
+    compromise every remote-stats collector makes."""
+    start = (now - timedelta(days=ANALYTICS_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    metrics = None
+    try:
+        try:
+            meta = fetch_json(ANALYTICS_META_URL, key)
+        except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+            meta = {}
+        metrics = analytics_metrics(meta)
+        payload = query_analytics(key, metrics, start, end)
+        rows = payload.get("data") or {}
+        if isinstance(rows, dict):
+            rows = rows.get("data")
+        if isinstance(rows, list):
+            return rows
+    except urllib.error.HTTPError as error:
+        if error.code in (400, 422) and metrics and metrics != [METRIC_REQUESTS]:
+            # A renamed metric upstream: degrade to requests only.
+            try:
+                payload = query_analytics(key, [METRIC_REQUESTS], start, end)
+                rows = (payload.get("data") or {}).get("data")
+                if isinstance(rows, list):
+                    return rows
+            except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+                pass
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def apply_analytics(record, rows, recent_dates):
+    """Fold analytics rows into the record's token sections. Never raises;
+    unusable input leaves the balance-only zeros in place."""
+    if not rows:
+        return
+    recent = {d: 0 for d in recent_dates}
+    models = {}
+    today = str(record.get("updatedAt") or "")[:10]  # UTC date, the API's clock
+    today_tokens = 0
+    today_prompts = 0
+    active = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        day = str(row.get("date__day") or "")[:10]
+        if day not in recent:
+            continue  # outside the window (bad row or upstream drift)
+        model = str(row.get("model") or "") or "unknown"
+        input_t = number(row.get(METRIC_INPUT))
+        output_t = number(row.get(METRIC_OUTPUT)) + number(row.get(METRIC_REASONING))
+        cache_t = number(row.get(METRIC_CACHE_READ))
+        requests = number(row.get(METRIC_REQUESTS))
+        total = input_t + output_t + cache_t
+        if not (total or requests):
+            continue
+        active.add(day)
+        if day in recent:
+            recent[day] += total
+        bucket = models.setdefault(model, {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0,
+        })
+        bucket["inputTokens"] += input_t
+        bucket["outputTokens"] += output_t
+        bucket["cacheReadInputTokens"] += cache_t
+        if day == today:
+            today_tokens += total
+            today_prompts += requests
+    record["recentDays"] = [{"date": d, "messageCount": recent[d]} for d in recent_dates]
+    record["modelUsage"] = models
+    record["todayTotalTokens"] = today_tokens
+    record["todayPrompts"] = today_prompts
+    record["activeDays"] = len(active)
+    record["activeDates"] = sorted(active)
+
+
 def scan():
     now = datetime.now(timezone.utc)
     today = now.strftime("%Y-%m-%d")
@@ -93,6 +270,7 @@ def scan():
         "updatedAt": now.isoformat(),
         "ready": False,
         "hasLocalStats": False,
+        "scope": "account",
         "tierLabel": "Pay-as-you-go",
         "limits": [],
         "usageStatusText": "",
@@ -131,6 +309,9 @@ def scan():
         keyinfo = {}
 
     record["ready"] = True
+    mkey = management_key()
+    if mkey:
+        apply_analytics(record, fetch_analytics(mkey, now), recent_dates)
     balance = total - used
     if total > 0:
         record["limits"] = [{

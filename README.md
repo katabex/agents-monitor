@@ -17,7 +17,7 @@ not show. When installed it replaces the stock widget on the bar.
 | fireworks | prepaid balance estimate | as stock |
 | **pi** | — (local stats only) | `~/.pi/agent/sessions` + `~/.omp/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
 | **opencode** | z.ai GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
-| **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | — (no session history; the tile shows the balance) |
+| **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it) |
 
 Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The one QML
@@ -69,10 +69,17 @@ config directory.
   windows are open), unknown row types skipped, `--quota-debug` prints the
   raw payload
 - `bin/omarchy-agent-usage-openrouter` — Python collector; balance meter
-  from OpenRouter's official credits/auth-key endpoints. Key:
-  `$OPENROUTER_API_KEY`, else `{"apiKey": …}` in
-  `~/.config/omarchy/agents/openrouter.json`. Unconfigured runs never
-  clobber a previously collected record
+  from OpenRouter's official credits/auth-key endpoints, plus token stats
+  (today / by day / by model) from the Analytics API. Keys: balance needs
+  `$OPENROUTER_API_KEY` or `{"apiKey": …}` in
+  `~/.config/omarchy/agents/openrouter.json` (systemd/panel environments
+  don't inherit shell exports); token stats additionally need a
+  **management key** (openrouter.ai → Settings → Management Keys —
+  read-only, cannot make model requests) in the same file as
+  `{"managementKey": …}` or `$OPENROUTER_MANAGEMENT_KEY`. Without it the
+  record degrades to balance-only. Stats are account-scoped (`scope:
+  "account"`, the fireworks convention) so synced devices take the max, not
+  the sum. Unconfigured runs never clobber a previously collected record
 - `bin/agents-monitor-update` — refresh runner; the panel calls this instead
   of `omarchy-agent-usage-update` directly. Forwards to the stock updater
   (claude/codex/fireworks, honoring `--force`, `--limits-only`, `--except`,
