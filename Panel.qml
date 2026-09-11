@@ -100,7 +100,7 @@ Panel {
   // tool that ran. Same record, two honest labels.
   function serviceName(p) {
     if (!p) return ""
-    var map = { claude: "Anthropic", codex: "OpenAI", opencode: "z.ai" }
+    var map = { claude: "Anthropic", codex: "OpenAI", opencode: "Z.ai" }
     return map[String(p.providerId)] || p.providerName
   }
   function agentName(p) {
