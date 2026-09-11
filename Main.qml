@@ -273,6 +273,7 @@ Item {
       totalSessions: synced ? numberValue(stats.totalSessions) : numberValue(record.totalSessions),
       activeDays: synced ? numberValue(stats.activeDays) : numberValue(record.activeDays),
       modelUsage: synced ? (stats.modelUsage || ({})) : (record.modelUsage || ({})),
+      subscriptionUsage: record.subscriptionUsage || ({}),
       hasLocalStats: synced ? (stats.hasLocalStats !== false) : (record.hasLocalStats !== false),
       hasPromptStats: synced ? (stats.hasPromptStats !== false) : (record.hasPromptStats !== false),
 

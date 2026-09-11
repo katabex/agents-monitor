@@ -60,6 +60,15 @@ restarts the shell — changed QML needs it (see "Deploying changes").
 Restores the stock `omarchy.agents` widget and removes the plugin from the
 config directory.
 
+## Attribution
+
+The pi collector buckets every counted message by the subscription whose
+credits it burns (`subscriptionUsage` in the record; provider ids mapped to
+service-tab ids — `zai` → Z.ai via the opencode record until z.ai gets its
+own, `openrouter` → OpenRouter, unmapped ids pass through). The agent card
+shows it as a PER SUBSCRIPTION section under TOKENS BY MODEL. Attribution
+is billing-accurate but session-static, and counts only this machine.
+
 ## How bundled collection works
 
 - `bin/omarchy-agent-usage-pi` — Python collector; scans pi/omp session

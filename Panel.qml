@@ -308,6 +308,45 @@ Panel {
     return peak
   }
 
+  // Which subscriptions this agent's tokens burned, heaviest first.
+  // Collectors map provider ids to service-tab ids; unmapped ids show
+  // as-is. Buckets carry modelUsage's shape so rows and tooltips render
+  // identically.
+  function subscriptionRows(p) {
+    var usageBySub = p ? (p.subscriptionUsage || {}) : {}
+    var rows = []
+    for (var id in usageBySub) {
+      var bucket = usageBySub[id] || {}
+      var input = Number(bucket.inputTokens || 0)
+      var output = Number(bucket.outputTokens || 0)
+      var cacheRead = Number(bucket.cacheReadInputTokens || 0)
+      var cacheWrite = Number(bucket.cacheCreationInputTokens || 0)
+      var total = input + output + cacheRead + cacheWrite
+      if (total > 0)
+        rows.push({
+          name: subscriptionDisplayName(id),
+          total: total,
+          input: input,
+          output: output,
+          cacheRead: cacheRead,
+          cacheWrite: cacheWrite
+        })
+    }
+    rows.sort(function(a, b) { return b.total - a.total })
+    return rows
+  }
+
+  function subscriptionDisplayName(id) {
+    var map = {
+      claude: "Anthropic",
+      codex: "OpenAI",
+      opencode: "Z.ai",
+      openrouter: "OpenRouter",
+      fireworks: "Fireworks"
+    }
+    return map[String(id)] || String(id)
+  }
+
   function modelRows(p) {
     var usageByModel = p ? (p.modelUsage || {}) : {}
     var rows = []
@@ -877,6 +916,36 @@ Panel {
                     // Scaled to the heaviest model, so the top row is always full —
                     // the same scale-to-peak the weekly chart uses for its busiest day.
                     share: modelData.total / Math.max(1, root.models[0].total)
+                  }
+                }
+              }
+
+              // ---------- Per subscription ----------
+              // The attribution mirror of the service card: which
+              // subscription's credits this agent's tokens burned.
+              Column {
+                id: subscriptionSection
+                visible: rows.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var rows: root.subscriptionRows(root.agent)
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "PER SUBSCRIPTION"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: subscriptionSection.rows
+
+                  ModelRow {
+                    required property var modelData
+                    width: subscriptionSection.width
+                    row: modelData
+                    share: modelData.total / Math.max(1, subscriptionSection.rows[0].total)
                   }
                 }
               }

@@ -43,6 +43,34 @@ SESSION_ROOTS = [
 CLAIMED_PROVIDERS = {"anthropic", "openai-codex"}
 CLAIMED_API_PREFIXES = ("openai-codex",)
 
+# pi provider ids → the service tab whose credits those tokens burn
+# (attribution is billing-accurate: an OpenRouter-routed call burns
+# OpenRouter credits whatever the model behind it). "zai" maps to the
+# opencode record only because the GLM plan's quota rides it until z.ai
+# gets its own record. Unmapped ids pass through; the panel labels them
+# as-is.
+PROVIDER_TO_SERVICE = {
+    "zai": "opencode",
+    "openrouter": "openrouter",
+    "fireworks": "fireworks",
+    "anthropic": "claude",
+    "openai": "codex",
+    "openai-codex": "codex",
+}
+
+
+def service_for(provider):
+    return PROVIDER_TO_SERVICE.get(provider, provider or "unknown")
+
+
+def empty_bucket():
+    return {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 0,
+    }
+
 
 def local_day(value):
     """Local calendar date for an entry/message timestamp, like the stock
@@ -102,6 +130,8 @@ def scan():
     today_total = 0
     total_prompts = 0
     usage_by_model = {}
+    usage_by_subscription = {}
+    today_by_subscription = {}
 
     for root in SESSION_ROOTS:
         if not root.is_dir():
@@ -145,16 +175,17 @@ def scan():
                         sessions.add(str(path))
                         active_days.add(day)
 
-                        bucket = usage_by_model.setdefault(model, {
-                            "inputTokens": 0,
-                            "outputTokens": 0,
-                            "cacheReadInputTokens": 0,
-                            "cacheCreationInputTokens": 0,
-                        })
+                        bucket = usage_by_model.setdefault(model, empty_bucket())
                         bucket["inputTokens"] += input_tokens
                         bucket["outputTokens"] += output_tokens
                         bucket["cacheReadInputTokens"] += cache_read
                         bucket["cacheCreationInputTokens"] += cache_write
+
+                        sub = usage_by_subscription.setdefault(service_for(provider), empty_bucket())
+                        sub["inputTokens"] += input_tokens
+                        sub["outputTokens"] += output_tokens
+                        sub["cacheReadInputTokens"] += cache_read
+                        sub["cacheCreationInputTokens"] += cache_write
 
                         if day in recent:
                             recent[day]["messageCount"] += sum_tokens
@@ -163,6 +194,8 @@ def scan():
                             today_sessions.add(str(path))
                             today_total += sum_tokens
                             today_tokens[model] = today_tokens.get(model, 0) + sum_tokens
+                            key = service_for(provider)
+                            today_by_subscription[key] = today_by_subscription.get(key, 0) + sum_tokens
             except OSError:
                 continue
 
@@ -187,6 +220,8 @@ def scan():
         "activeDays": len(active_days),
         "activeDates": sorted(d for d in active_days if d),
         "modelUsage": usage_by_model,
+        "subscriptionUsage": usage_by_subscription,
+        "todaySubscriptionUsage": today_by_subscription,
     }
 
 
