@@ -263,7 +263,7 @@ def zai_quota(now):
     if payload is None:
         hint = "z.ai quota unavailable (probe failed, no fresh cache)" if key \
             else "z.ai quota needs a key: auth.json or $ZAI_API_KEY"
-        return [], "", "", hint
+        return [], "", "z.ai quota unavailable", hint
     rows, level = zai_limit_rows(payload)
     rows = [row for row in rows if window_open(row["resetsAt"], now)]
     text = short_quota_text(rows)

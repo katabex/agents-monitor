@@ -579,7 +579,15 @@ Panel {
               }
 
               BorderSurface {
-                visible: !!root.service && String(root.service.authHelpText || "") !== ""
+                // Show only when the record says why AND what to do:
+                // stock collectors initialize authHelpText and never clear
+                // it on success, so help alone nags on every healthy
+                // provider (their "Run claude auth login" shows while
+                // limits are perfectly live). usageStatusText is the
+                // headline, authHelpText the remedy; both set = real.
+                visible: !!root.service
+                  && String(root.service.usageStatusText || "") !== ""
+                  && String(root.service.authHelpText || "") !== ""
                 width: parent.width
                 implicitHeight: serviceStatusText.implicitHeight + Style.spacing.xl * 2
                 height: implicitHeight

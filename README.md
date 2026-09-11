@@ -29,8 +29,9 @@ OpenCode, pi, plus account-scoped analytics tabs), each switching
 independently. Strips size tabs to their name text and grow the panel to
 keep one row; the usage title names whose truth the charts tell
 (`USAGE — ACCOUNT` vs `USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent
-status box gates on `authHelpText` (its content); empty cards collapse
-out; keyboard: left/right cycles the focused card, up/down scrolls and
+status box shows only when a record sets both `usageStatusText` and
+`authHelpText` — stock collectors leave a stale help text on healthy
+records, so help alone would nag; empty cards collapse out; keyboard: left/right cycles the focused card, up/down scrolls and
 hands focus between cards at the scroll edges.
 
 ## Install
