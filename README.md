@@ -20,12 +20,15 @@ not show. When installed it replaces the stock widget on the bar.
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it) |
 
 Everything else — the per-day and per-model charts, cross-device
-sync, settings schema — is the stock widget, unchanged. The one QML
-divergence: the provider tab strip sizes tabs to their name text (natural
-width plus the control's own padding) and grows the panel to keep the strip
-on one row, wrapping only on screens too narrow for it — stock divided the
-strip into equal cells, which clipped names like "OpenRouter" at six
-providers in a 380 px panel.
+sync, settings schema — is the stock widget, unchanged. The QML
+divergences: (1) the provider tab strip sizes tabs to their name text
+(natural width plus the control's own padding) and grows the panel to keep
+the strip on one row, wrapping only on screens too narrow for it — stock
+divided the strip into equal cells, which clipped names like "OpenRouter"
+at six providers in a 380 px panel; (2) the urgent status box gates its
+visibility on `authHelpText` (its content) instead of `usageStatusText` —
+stock's pairing rendered an empty red box whenever a provider had a
+healthy status line and no help text.
 
 ## Install
 
@@ -139,10 +142,11 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 ```
 
 Copy upstream changes in, then re-apply the two-line `Main.qml` patch
-(`updateBin` property + `updateCommand` first element) and the one
-`Panel.qml` patch (the content-fitted provider tab strip: `Flow` instead
+(`updateBin` property + `updateCommand` first element) and the
+`Panel.qml` patches (the content-fitted provider tab strip: `Flow` instead
 of equal-cell `Row`, buttons at natural width, `contentWidth` grown by
-`naturalRowWidth`) — everything else the fork adds lives in
+`naturalRowWidth`; and the status box's `authHelpText` visibility gate) —
+everything else the fork adds lives in
 files upstream does not have (the `bin/` tree), which cannot conflict. The
 manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,

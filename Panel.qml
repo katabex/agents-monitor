@@ -534,7 +534,12 @@ Panel {
 
           // ---------- Status ----------
           BorderSurface {
-            visible: !!root.provider && String(root.provider.usageStatusText || "") !== ""
+            // The box's content is authHelpText, so it must gate on
+            // authHelpText too: stock gated on usageStatusText, which these
+            // collectors also use as the hero's informational meta line —
+            // that pairing rendered an empty red box whenever a provider
+            // had a healthy status line and no help text.
+            visible: !!root.provider && String(root.provider.authHelpText || "") !== ""
             width: parent.width
             implicitHeight: statusText.implicitHeight + Style.spacing.xl * 2
             color: root.alpha(root.urgent, 0.10)

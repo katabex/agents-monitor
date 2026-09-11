@@ -238,8 +238,10 @@ def write_cached_payload(payload, now):
 
 
 def zai_quota(now):
-    """(rows, level, status_text) for the record; never raises. No key →
-    empty rows with a hint; failed probe → cached payload while fresh."""
+    """(rows, level, status_text, help_text) for the record; never raises.
+    Failures surface in authHelpText (the panel's urgent red box shows that,
+    and the hero falls back to the tier label) — usageStatusText stays the
+    informational line."""
     key = zai_api_key()
     payload = None
     source = ""
@@ -259,12 +261,13 @@ def zai_quota(now):
     _LAST_RAW_PAYLOAD["source"] = source
 
     if payload is None:
-        hint = "z.ai quota unavailable" if key else "z.ai quota: no key"
-        return [], "", hint
+        hint = "z.ai quota unavailable (probe failed, no fresh cache)" if key \
+            else "z.ai quota needs a key: auth.json or $ZAI_API_KEY"
+        return [], "", "", hint
     rows, level = zai_limit_rows(payload)
     rows = [row for row in rows if window_open(row["resetsAt"], now)]
     text = short_quota_text(rows)
-    return rows, level, text
+    return rows, level, text, ""
 
 
 # ---------------------------------------------------------------- collection
@@ -343,7 +346,7 @@ def scan():
             connection.close()
 
     now = datetime.now(timezone.utc)
-    quota_rows, quota_level, quota_text = zai_quota(now)
+    quota_rows, quota_level, quota_text, quota_help = zai_quota(now)
     return {
         "schemaVersion": 1,
         "id": "opencode",
@@ -354,7 +357,7 @@ def scan():
         "tierLabel": ("GLM " + quota_level.capitalize()) if quota_level else "local stats",
         "limits": quota_rows,
         "usageStatusText": quota_text,
-        "authHelpText": "",
+        "authHelpText": quota_help,
         "todayPrompts": today_prompts,
         "todaySessions": len(today_sessions),
         "todayTotalTokens": today_total,
