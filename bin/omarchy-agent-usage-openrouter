@@ -61,8 +61,9 @@ ANALYTICS_WINDOW_DAYS = 7
 # renamed; every read is a .get() with a default.
 METRIC_INPUT = "tokens_prompt"
 METRIC_OUTPUT = "tokens_completion"
-METRIC_REASONING = "tokens_reasoning"
-METRIC_CACHE_READ = "tokens_cache_read"
+METRIC_REASONING = "reasoning_tokens"
+METRIC_CACHE_READ = "cached_tokens"
+METRIC_SPEND = "total_usage"
 METRIC_REQUESTS = "request_count"
 
 AUTH_HELP = (
@@ -134,7 +135,7 @@ def analytics_metrics(meta_payload):
     only on a 400."""
     candidates = [
         METRIC_REQUESTS, METRIC_INPUT, METRIC_OUTPUT,
-        METRIC_REASONING, METRIC_CACHE_READ,
+        METRIC_REASONING, METRIC_CACHE_READ, METRIC_SPEND,
     ]
     try:
         known = set()
@@ -216,6 +217,7 @@ def apply_analytics(record, rows, recent_dates):
     today = str(record.get("updatedAt") or "")[:10]  # UTC date, the API's clock
     today_tokens = 0
     today_prompts = 0
+    today_spend = 0.0
     active = set()
     for row in rows:
         if not isinstance(row, dict):
@@ -246,12 +248,17 @@ def apply_analytics(record, rows, recent_dates):
         if day == today:
             today_tokens += total
             today_prompts += requests
+            try:
+                today_spend += float(row.get(METRIC_SPEND) or 0)
+            except (TypeError, ValueError):
+                pass
     record["recentDays"] = [{"date": d, "messageCount": recent[d]} for d in recent_dates]
     record["modelUsage"] = models
     record["todayTotalTokens"] = today_tokens
     record["todayPrompts"] = today_prompts
     record["activeDays"] = len(active)
     record["activeDates"] = sorted(active)
+    return today_spend
 
 
 def scan():
@@ -310,8 +317,9 @@ def scan():
 
     record["ready"] = True
     mkey = management_key()
+    today_spend = None
     if mkey:
-        apply_analytics(record, fetch_analytics(mkey, now), recent_dates)
+        today_spend = apply_analytics(record, fetch_analytics(mkey, now), recent_dates)
     balance = total - used
     if total > 0:
         record["limits"] = [{
@@ -321,7 +329,9 @@ def scan():
             "resetsAt": "",  # credits do not renew; no countdown
         }]
     status = f"${balance:.2f} of ${total:.2f} left"
-    daily = money(keyinfo.get("usage_daily"))
+    # Account-wide daily spend from analytics beats the key-scoped
+    # usage_daily of /auth/key: the token charts are account-wide too.
+    daily = today_spend if today_spend is not None and today_spend > 0 else money(keyinfo.get("usage_daily"))
     if daily and daily > 0:
         status += f" · today ${daily:.2f}"
     record["usageStatusText"] = status
