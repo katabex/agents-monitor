@@ -19,8 +19,13 @@ not show. When installed it replaces the stock widget on the bar.
 | **opencode** | z.ai GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | — (no session history; the tile shows the balance) |
 
-Everything else — the panel UI, per-day and per-model charts, cross-device
-sync, settings schema — is the stock widget, unchanged.
+Everything else — the per-day and per-model charts, cross-device
+sync, settings schema — is the stock widget, unchanged. The one QML
+divergence: the provider tab strip sizes tabs to their name text (natural
+width plus the control's own padding) and grows the panel to keep the strip
+on one row, wrapping only on screens too narrow for it — stock divided the
+strip into equal cells, which clipped names like "OpenRouter" at six
+providers in a 380 px panel.
 
 ## Install
 
@@ -127,8 +132,10 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 ```
 
 Copy upstream changes in, then re-apply the two-line `Main.qml` patch
-(`updateBin` property + `updateCommand` first element) — `Panel.qml` is
-byte-identical to upstream again. Everything else the fork adds lives in
+(`updateBin` property + `updateCommand` first element) and the one
+`Panel.qml` patch (the content-fitted provider tab strip: `Flow` instead
+of equal-cell `Row`, buttons at natural width, `contentWidth` grown by
+`naturalRowWidth`) — everything else the fork adds lives in
 files upstream does not have (the `bin/` tree), which cannot conflict. The
 manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,

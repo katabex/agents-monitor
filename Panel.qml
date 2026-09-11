@@ -355,7 +355,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    contentWidth: panel.fittedContentWidth(Math.max(Style.space(380),
+      providerSwitch.visible ? providerSwitch.naturalRowWidth + Style.space(8) : 0))
     // Taller than the control panels on purpose: this one is a dashboard, and
     // the whole point is reading limits and history without scrolling.
     contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
@@ -459,15 +460,31 @@ Panel {
           }
 
           // ---------- Provider switch ----------
-          Row {
+          // Content-fitted tabs: each button takes its natural width (text +
+          // the control's own padding), so provider names never clip — equal
+          // cells did at six providers in a 380 px panel. The panel's width
+          // grows to keep the strip on one row when the screen allows it
+          // (see contentWidth above); on narrower screens Flow wraps to a
+          // second row instead of squeezing the names.
+          Flow {
             id: providerSwitch
             visible: root.providers.length > 1
             width: parent.width
             spacing: Style.spacing.md
 
-            readonly property real cellWidth: root.providers.length > 0
-              ? (width - spacing * (root.providers.length - 1)) / root.providers.length
-              : 0
+            // Single-row width of the strip at natural button sizes. Every
+            // visual child is one Repeater-created button, so summing them
+            // needs no type filter. Independent of layout width, so the
+            // contentWidth binding above cannot loop.
+            readonly property real naturalRowWidth: {
+              var total = 0
+              var count = 0
+              for (var i = 0; i < children.length; i++) {
+                total += children[i].implicitWidth || 0
+                count++
+              }
+              return count > 1 ? total + spacing * (count - 1) : total
+            }
 
             Repeater {
               model: root.providers
@@ -476,7 +493,6 @@ Panel {
                 required property var modelData
                 required property int index
 
-                width: providerSwitch.cellWidth
                 text: modelData.providerName
                 selected: index === root.providerIndex
                 hasCursor: root.cursorActive && index === root.providerIndex
