@@ -186,6 +186,19 @@ Panel {
     return tier.charAt(0).toUpperCase() + tier.slice(1)
   }
 
+  // The usage charts tell different truths per provider: account-wide
+  // analytics (openrouter, fireworks — scope "account") vs machine-local
+  // session stats (everything else). The group title says which one the
+  // numbers are; a synced setup merges device stats into one total.
+  function usageGroupTitle(p) {
+    if (!p) return ""
+    if (String(p.scope || "") === "account")
+      return "USAGE — ACCOUNT"
+    if (p.syncEnabled && Number(p.syncDeviceCount || 0) > 1)
+      return "USAGE — " + Number(p.syncDeviceCount) + " DEVICES"
+    return "USAGE — THIS MACHINE"
+  }
+
   // Local calendar date, recomputed from nowMs so a panel left open across
   // midnight moves the "Today" row with the clock.
   function todayDate() {
@@ -655,9 +668,24 @@ Panel {
           }
 
           // ---------- Usage ----------
+          // The group boundary: everything above is subscription state
+          // (balance, limit windows — account truth, the same on every
+          // machine); everything below is what actually ran. The title
+          // names whose truth the charts tell, from the record's scope;
+          // with no charts at all the whole group collapses out.
           PanelSeparator {
-            visible: usageSection.visible
+            visible: usageSection.visible || modelSection.visible
             foreground: root.foreground
+          }
+
+          Text {
+            visible: usageSection.visible || modelSection.visible
+            width: parent.width
+            textFormat: Text.PlainText
+            text: root.usageGroupTitle(root.provider)
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
           }
 
           Column {

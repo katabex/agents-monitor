@@ -262,6 +262,7 @@ Item {
       limits: Array.isArray(record.limits) ? record.limits : [],
       tierLabel: String(record.tierLabel || ""),
       balance: balanceValue(record.balance),
+      scope: String(record.scope || "device"),
 
       todayPrompts: synced ? numberValue(stats.todayPrompts) : numberValue(record.todayPrompts),
       todaySessions: synced ? numberValue(stats.todaySessions) : numberValue(record.todaySessions),

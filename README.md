@@ -28,7 +28,11 @@ divided the strip into equal cells, which clipped names like "OpenRouter"
 at six providers in a 380 px panel; (2) the urgent status box gates its
 visibility on `authHelpText` (its content) instead of `usageStatusText` —
 stock's pairing rendered an empty red box whenever a provider had a
-healthy status line and no help text.
+healthy status line and no help text; (3) the day/model charts sit under
+a group title naming whose truth they tell — `USAGE — ACCOUNT` for
+account-scoped records (`scope: "account"`: OpenRouter, Fireworks) vs
+`USAGE — THIS MACHINE` for local session stats (or `— N DEVICES` when
+sync merges machines); with no charts at all the group collapses out.
 
 ## Install
 
@@ -91,8 +95,9 @@ config directory.
   runs never touch the network-bound bundled probes, so opening the panel
   never hits the undocumented z.ai endpoint (the 5-minute opencode timer
   below keeps quota fresh instead).
-- `Main.qml` differs from upstream in exactly two lines: the resolved path of
-  the bundled runner, and the command that uses it
+- `Main.qml` differs from upstream in three lines: the resolved path of
+  the bundled runner, the command that uses it, and the `scope`
+  passthrough in `displayProvider`
 
 ### The timer (option 2)
 
@@ -141,12 +146,14 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Panel.qml Panel.qml
 diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 ```
 
-Copy upstream changes in, then re-apply the two-line `Main.qml` patch
-(`updateBin` property + `updateCommand` first element) and the
+Copy upstream changes in, then re-apply the `Main.qml` patch (the
+runner: `updateBin` property + `updateCommand` first element; plus the
+`scope` passthrough in `displayProvider`) and the
 `Panel.qml` patches (the content-fitted provider tab strip: `Flow` instead
 of equal-cell `Row`, buttons at natural width, `contentWidth` grown by
-`naturalRowWidth`; and the status box's `authHelpText` visibility gate) —
-everything else the fork adds lives in
+`naturalRowWidth`; the status box's `authHelpText` visibility gate; and
+the usage group boundary with its `usageGroupTitle` header) — everything
+else the fork adds lives in
 files upstream does not have (the `bin/` tree), which cannot conflict. The
 manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,
