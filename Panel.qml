@@ -40,6 +40,8 @@ Panel {
     var result = []
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i]
+      if (String(p.scope || "") === "account")
+        continue  // OpenRouter/Fireworks: account analytics, not agents
       var days = p.recentDays || []
       var has = false
       for (var d = 0; d < days.length; d++)
@@ -780,6 +782,16 @@ Panel {
                 }
               }
 
+              // Account-scoped services (OpenRouter, Fireworks) burn
+              // credits per request: their day/model charts are
+              // subscription data and live here, under the service's own
+              // scope title.
+              UsageCharts {
+                visible: String(root.service ? root.service.scope : "") === "account"
+                p: root.service
+                sectionTitle: root.usageGroupTitle(root.service)
+              }
+
             }
           }
 
@@ -861,65 +873,11 @@ Panel {
                 }
               }
 
-              Column {
-                id: usageSection
-                visible: !!root.agent && root.agent.recentDays && root.agent.recentDays.length > 0
-                width: parent.width
-                spacing: Style.spacing.md
-
-                readonly property var days: root.agent ? (root.agent.recentDays || []) : []
-                readonly property real peak: Math.max(1, root.weekPeak(root.agent))
-
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "TOKENS BY DAY"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                }
-
-                Repeater {
-                  model: usageSection.days
-
-                  DayRow {
-                    required property var modelData
-                    required property int index
-
-                    width: usageSection.width
-                    day: modelData
-                    ratio: Number(modelData.messageCount || 0) / usageSection.peak
-                    // By date, not by position: the Claude stats-cache fallback can
-                    // hand us a window that stops short of today.
-                    today: String(modelData.date || "") === root.todayDate()
-                  }
-                }
+              UsageCharts {
+                p: root.agent
               }
 
-              Column {
-                id: modelSection
-                visible: root.models.length > 0
-                width: parent.width
-                spacing: Style.spacing.md
 
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "TOKENS BY MODEL"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                }
-
-                Repeater {
-                  model: root.models
-
-                  ModelRow {
-                    required property var modelData
-                    width: modelSection.width
-                    row: modelData
-                    // Scaled to the heaviest model, so the top row is always full —
-                    // the same scale-to-peak the weekly chart uses for its busiest day.
-                    share: modelData.total / Math.max(1, root.models[0].total)
-                  }
-                }
-              }
 
               // ---------- Per subscription ----------
               // The attribution mirror of the service card: which
@@ -1143,6 +1101,88 @@ Panel {
 
   // Model rows read as a table: the share bar fills the row behind the label
   // instead of stacking under it, which keeps the whole dashboard on one screen.
+  // Day/model charts for whichever provider they are bound to. Agents
+  // show theirs in the agent card; account-scoped services (OpenRouter,
+  // Fireworks) show theirs inside the service card — their tokens are
+  // credit burn, subscription data, not agent activity.
+  component UsageCharts: Column {
+    id: charts
+    property var p: null
+    property string sectionTitle: ""
+    readonly property var modelList: root.modelRows(p)
+    width: parent.width
+    spacing: Style.spacing.md
+
+    Text {
+      width: parent.width
+      visible: charts.sectionTitle !== ""
+      textFormat: Text.PlainText
+      text: charts.sectionTitle
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+        Column {
+          id: usageSection
+          visible: !!charts.p && charts.p.recentDays && charts.p.recentDays.length > 0
+          width: parent.width
+          spacing: Style.spacing.md
+
+          readonly property var days: charts.p ? (charts.p.recentDays || []) : []
+          readonly property real peak: Math.max(1, root.weekPeak(charts.p))
+
+          PanelSectionHeader {
+            width: parent.width
+            text: "TOKENS BY DAY"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: usageSection.days
+
+            DayRow {
+              required property var modelData
+              required property int index
+
+              width: usageSection.width
+              day: modelData
+              ratio: Number(modelData.messageCount || 0) / usageSection.peak
+              // By date, not by position: the Claude stats-cache fallback can
+              // hand us a window that stops short of today.
+              today: String(modelData.date || "") === root.todayDate()
+            }
+          }
+        }
+        Column {
+          id: modelSection
+          visible: charts.modelList.length > 0
+          width: parent.width
+          spacing: Style.spacing.md
+
+          PanelSectionHeader {
+            width: parent.width
+            text: "TOKENS BY MODEL"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: charts.modelList
+
+            ModelRow {
+              required property var modelData
+              width: modelSection.width
+              row: modelData
+              // Scaled to the heaviest model, so the top row is always full —
+              // the same scale-to-peak the weekly chart uses for its busiest day.
+              share: modelData.total / Math.max(1, charts.modelList[0].total)
+            }
+          }
+        }
+  }
+
   component ModelRow: Item {
     id: modelRow
     property var row: null
