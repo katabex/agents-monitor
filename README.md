@@ -8,6 +8,12 @@ Fork of the stock `omarchy.agents` widget (MIT) with built-in **pi agent**,
 **OpenCode**, and **OpenRouter** collection — providers the stock panel does
 not show. When installed it replaces the stock widget on the bar.
 
+![Agents Monitor panel](screenshots/panel.png)
+
+*The panel with the Z.ai subscription selected (quota meters) and the
+Claude Code agent below (day/model charts, per-subscription attribution).*
+
+
 ## What it adds over stock
 
 | Provider | Limits | Local stats |
