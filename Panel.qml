@@ -357,9 +357,12 @@ Panel {
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Math.max(Style.space(380),
       providerSwitch.visible ? providerSwitch.naturalRowWidth + Style.space(8) : 0))
-    // Taller than the control panels on purpose: this one is a dashboard, and
-    // the whole point is reading limits and history without scrolling.
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(640))
+    // Taller than the control panels on purpose: this one is a dashboard,
+    // and the whole point is reading limits and history without scrolling —
+    // so the card adopts to the content's full height and only the screen
+    // itself (fittedContentHeight's availableCardHeight cap) can force the
+    // Flickable fallback.
+    contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -472,26 +475,45 @@ Panel {
             width: parent.width
             spacing: Style.spacing.md
 
-            // Single-row width of the strip at natural button sizes. Every
-            // visual child is one Repeater-created button, so summing them
-            // needs no type filter. Independent of layout width, so the
-            // contentWidth binding above cannot loop.
-            readonly property real naturalRowWidth: {
+            // Single-row width of the strip at natural button sizes.
+            // Computed imperatively from the buttons themselves — binding
+            // over `children` never re-evaluates when the Repeater (re)creates
+            // its items, so the buttons report in via onCompleted/
+            // onImplicitWidthChanged/onDestruction instead. Independent of
+            // layout width, so the contentWidth binding above cannot loop.
+            // High-water mark: providers stream in one by one, so the live
+            // sum dips mid-population; never shrink it and the panel stops
+            // wiggling on every refresh. A smaller strip just leaves slack;
+            // a larger one still grows the panel.
+            property real naturalRowWidth: 0
+            function syncNaturalWidth() {
               var total = 0
               var count = 0
               for (var i = 0; i < children.length; i++) {
                 total += children[i].implicitWidth || 0
                 count++
               }
-              return count > 1 ? total + spacing * (count - 1) : total
+              var candidate = count > 1 ? total + spacing * (count - 1) : total
+              if (candidate > naturalRowWidth)
+                naturalRowWidth = candidate
             }
 
             Repeater {
               model: root.providers
 
+              // Delegates complete before the Repeater parents them into
+              // the Flow, so a button cannot measure itself at
+              // Component.onCompleted. itemAdded/itemRemoved fire after
+              // parenting; the deferred call lands once bindings have
+              // settled. onImplicitWidthChanged covers later resizes.
+              onItemAdded: function(index, item) { Qt.callLater(providerSwitch.syncNaturalWidth) }
+              onItemRemoved: function(index, item) { providerSwitch.syncNaturalWidth() }
+
               Button {
                 required property var modelData
                 required property int index
+
+                onImplicitWidthChanged: providerSwitch.syncNaturalWidth()
 
                 text: modelData.providerName
                 selected: index === root.providerIndex
