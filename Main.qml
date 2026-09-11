@@ -273,7 +273,7 @@ Item {
       totalSessions: synced ? numberValue(stats.totalSessions) : numberValue(record.totalSessions),
       activeDays: synced ? numberValue(stats.activeDays) : numberValue(record.activeDays),
       modelUsage: synced ? (stats.modelUsage || ({})) : (record.modelUsage || ({})),
-      subscriptionUsage: record.subscriptionUsage || ({}),
+      subscriptionUsage: attributionFor(record),
       hasLocalStats: synced ? (stats.hasLocalStats !== false) : (record.hasLocalStats !== false),
       hasPromptStats: synced ? (stats.hasPromptStats !== false) : (record.hasPromptStats !== false),
 
@@ -281,6 +281,35 @@ Item {
       syncDeviceCount: deviceCount,
       syncUpdatedAt: aggregateData && aggregateData.updatedAt ? aggregateData.updatedAt : ""
     }
+  }
+
+  // Agents whose stock collectors don't attribute still burn exactly one
+  // subscription by definition: Claude Code → Anthropic, Codex CLI →
+  // OpenAI. Synthesize that attribution from the record's own totals so
+  // every agent tab answers "which subscription did I burn".
+  function attributionFor(record) {
+    var provided = record.subscriptionUsage
+    if (provided && Object.keys(provided).length > 0) return provided
+    var id = String(record.id || "")
+    if (id !== "claude" && id !== "codex") return ({})
+    var usageByModel = record.modelUsage || ({})
+    var bucket = {
+      inputTokens: 0, outputTokens: 0,
+      cacheReadInputTokens: 0, cacheCreationInputTokens: 0
+    }
+    for (var model in usageByModel) {
+      var m2 = usageByModel[model] || {}
+      bucket.inputTokens += Number(m2.inputTokens || 0)
+      bucket.outputTokens += Number(m2.outputTokens || 0)
+      bucket.cacheReadInputTokens += Number(m2.cacheReadInputTokens || 0)
+      bucket.cacheCreationInputTokens += Number(m2.cacheCreationInputTokens || 0)
+    }
+    var total = bucket.inputTokens + bucket.outputTokens
+      + bucket.cacheReadInputTokens + bucket.cacheCreationInputTokens
+    if (total <= 0) return ({})
+    var result = {}
+    result[id] = bucket
+    return result
   }
 
   function setting(name, fallback) {

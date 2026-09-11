@@ -48,6 +48,20 @@ USAGE_DIR = Path(
 
 DB_PATH = Path.home() / ".local" / "share" / "opencode" / "opencode.db"
 
+# providerID → the service tab whose credits those tokens burn. The GLM
+# plan's quota rides this record ("opencode" service id = the Z.ai tab);
+# OpenCode's own built-in provider is the separate Zen subscription and
+# must not collide with it, hence "opencode-zen". Unmapped ids pass
+# through; the panel labels them as-is.
+OC_PROVIDER_TO_SERVICE = {
+    "zai": "opencode",
+    "zai-coding-plan": "opencode",
+    "opencode": "opencode-zen",
+    "openrouter": "openrouter",
+    "fireworks": "fireworks",
+    "anthropic": "claude",
+}
+
 ZAI_QUOTA_URL = "https://api.z.ai/api/monitor/usage/quota/limit"
 OPENCODE_AUTH_JSON = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 QUOTA_CACHE = Path(
@@ -75,6 +89,19 @@ def number(value):
     except (TypeError, ValueError):
         return 0
     return int(n) if n > 0 else 0
+
+
+def empty_sub_bucket():
+    return {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 0,
+    }
+
+
+def service_for(provider_id):
+    return OC_PROVIDER_TO_SERVICE.get(provider_id, provider_id or "unknown")
 
 
 def counted_tokens(tokens):
@@ -290,6 +317,8 @@ def scan():
     today_total = 0
     total_prompts = 0
     usage_by_model = {}
+    usage_by_subscription = {}
+    today_by_subscription = {}
 
     if DB_PATH.is_file():
         # mode=ro never takes a write lock, so a running OpenCode (WAL
@@ -335,6 +364,13 @@ def scan():
                 bucket["cacheReadInputTokens"] += read_t
                 bucket["cacheCreationInputTokens"] += write_t
 
+                sub = usage_by_subscription.setdefault(
+                    service_for(str(data.get("providerID") or "")), empty_sub_bucket())
+                sub["inputTokens"] += input_t
+                sub["outputTokens"] += output_t
+                sub["cacheReadInputTokens"] += read_t
+                sub["cacheCreationInputTokens"] += write_t
+
                 if day in recent:
                     recent[day]["messageCount"] += total
                 if day == today:
@@ -342,6 +378,8 @@ def scan():
                     today_sessions.add(session_id)
                     today_total += total
                     today_tokens[model] = today_tokens.get(model, 0) + total
+                    key = service_for(str(data.get("providerID") or ""))
+                    today_by_subscription[key] = today_by_subscription.get(key, 0) + total
         finally:
             connection.close()
 
@@ -368,6 +406,8 @@ def scan():
         "activeDays": len(active_days),
         "activeDates": sorted(d for d in active_days if d),
         "modelUsage": usage_by_model,
+        "subscriptionUsage": usage_by_subscription,
+        "todaySubscriptionUsage": today_by_subscription,
     }
 
 

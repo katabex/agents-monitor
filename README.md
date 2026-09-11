@@ -62,12 +62,24 @@ config directory.
 
 ## Attribution
 
-The pi collector buckets every counted message by the subscription whose
-credits it burns (`subscriptionUsage` in the record; provider ids mapped to
-service-tab ids — `zai` → Z.ai via the opencode record until z.ai gets its
-own, `openrouter` → OpenRouter, unmapped ids pass through). The agent card
-shows it as a PER SUBSCRIPTION section under TOKENS BY MODEL. Attribution
-is billing-accurate but session-static, and counts only this machine.
+Every agent tab answers "which subscription did my tokens burn" in a PER
+SUBSCRIPTION section under TOKENS BY MODEL:
+
+- **pi** — buckets each counted message by its session provider
+  (`zai` → Z.ai, `openrouter` → OpenRouter; unmapped ids pass through)
+- **OpenCode** — buckets each db message by `providerID`
+  (`zai`/`zai-coding-plan` → Z.ai via the opencode record until z.ai gets
+  its own; the built-in `opencode` provider is the separate Zen
+  subscription, labeled "OpenCode Zen")
+- **Claude Code / Codex** — synthesized from the record's own totals
+  (they burn exactly one subscription by definition; note a model routed
+  through a compat gateway still counts as its gateway's subscription,
+  e.g. GLM via z.ai's Anthropic-compat endpoint shows under Anthropic)
+
+OpenRouter/Fireworks tabs carry no attribution — their charts are
+account-wide analytics; the per-app split (analytics `app` dimension) is
+the planned mirror view. Attribution is billing-accurate but
+session-static, and counts only this machine.
 
 ## How bundled collection works
 

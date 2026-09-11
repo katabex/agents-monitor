@@ -342,7 +342,8 @@ Panel {
       codex: "OpenAI",
       opencode: "Z.ai",
       openrouter: "OpenRouter",
-      fireworks: "Fireworks"
+      fireworks: "Fireworks",
+      "opencode-zen": "OpenCode Zen"
     }
     return map[String(id)] || String(id)
   }
