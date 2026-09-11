@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""OpenRouter credit collector for the Agents Monitor panel.
+
+Prints (or, with --write, atomically writes) the record contract that
+~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
+bundled pi/opencode collectors emit.
+
+OpenRouter has no subscription windows to meter — it is pay-as-you-go
+credit, so the record carries a single "Credits used" limit row (no reset:
+credits do not renew) and a balance line instead of session history:
+
+  GET /api/v1/credits            → total_credits, total_usage
+  GET /api/v1/auth/key           → label, usage_daily, is_free_tier
+
+Balance is total_credits − total_usage (there is no `remaining` field).
+
+Key resolution: $OPENROUTER_API_KEY, else {"apiKey": …} in
+~/.config/omarchy/agents/openrouter.json (the fireworks.json precedent —
+systemd user units do not inherit the shell environment). Without a key
+the record is printed not-ready with help text and nothing is written, so
+a previously collected record is never clobbered by an unconfigured run.
+"""
+
+import json
+import os
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+CREDITS_URL = "https://openrouter.ai/api/v1/credits"
+KEY_URL = "https://openrouter.ai/api/v1/auth/key"
+OPENROUTER_CONFIG = Path.home() / ".config" / "omarchy" / "agents" / "openrouter.json"
+TIMEOUT = 10.0
+
+AUTH_HELP = (
+    "Set OPENROUTER_API_KEY, or put {\"apiKey\": …} in "
+    + str(OPENROUTER_CONFIG)
+)
+
+
+def api_key():
+    """$OPENROUTER_API_KEY, else the config file; \"\" when unconfigured."""
+    env = os.environ.get("OPENROUTER_API_KEY")
+    if env:
+        return env
+    if OPENROUTER_CONFIG.is_file():
+        try:
+            value = json.loads(OPENROUTER_CONFIG.read_text(encoding="utf-8")).get("apiKey")
+        except (OSError, json.JSONDecodeError):
+            value = None
+        if value:
+            return str(value)
+    return ""
+
+
+def fetch_json(url, key):
+    request = urllib.request.Request(
+        url,
+        headers={"Authorization": "Bearer " + key, "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        return json.loads(response.read().decode("utf-8")).get("data") or {}
+
+
+def money(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def scan():
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    recent_dates = []
+    for offset in range(6, -1, -1):
+        recent_dates.append(
+            (now - timedelta(days=offset)).strftime("%Y-%m-%d")
+        )
+
+    record = {
+        "schemaVersion": 1,
+        "id": "openrouter",
+        "name": "OpenRouter",
+        "updatedAt": now.isoformat(),
+        "ready": False,
+        "hasLocalStats": False,
+        "tierLabel": "Pay-as-you-go",
+        "limits": [],
+        "usageStatusText": "",
+        "authHelpText": "",
+        "todayPrompts": 0,
+        "todaySessions": 0,
+        "todayTotalTokens": 0,
+        "todayTokensByModel": {},
+        "recentDays": [{"date": d, "messageCount": 0} for d in recent_dates],
+        "totalPrompts": 0,
+        "totalSessions": 0,
+        "activeDays": 0,
+        "activeDates": [],
+        "modelUsage": {},
+    }
+
+    key = api_key()
+    if not key:
+        record["authHelpText"] = AUTH_HELP
+        return record
+
+    try:
+        credits = fetch_json(CREDITS_URL, key)
+        total = money(credits.get("total_credits"))
+        used = money(credits.get("total_usage"))
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        record["authHelpText"] = "OpenRouter is unreachable right now"
+        return record
+    if total is None or used is None:
+        record["authHelpText"] = "OpenRouter returned an invalid credits response"
+        return record
+
+    try:
+        keyinfo = fetch_json(KEY_URL, key)
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        keyinfo = {}
+
+    record["ready"] = True
+    balance = total - used
+    if total > 0:
+        record["limits"] = [{
+            "label": "Credits used",
+            "title": "Credits used",
+            "percent": min(1.0, used / total),
+            "resetsAt": "",  # credits do not renew; no countdown
+        }]
+    status = f"${balance:.2f} of ${total:.2f} left"
+    daily = money(keyinfo.get("usage_daily"))
+    if daily and daily > 0:
+        status += f" · today ${daily:.2f}"
+    record["usageStatusText"] = status
+    if keyinfo.get("is_free_tier"):
+        record["tierLabel"] = "Free tier"
+    return record
+
+
+def write_record(record):
+    USAGE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".openrouter.", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, str(USAGE_DIR / "openrouter.json"))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    record = scan()
+    if "--write" in sys.argv[1:]:
+        if not record["ready"]:
+            # Never clobber a previously collected good record with an
+            # unconfigured or failed run.
+            sys.stderr.write(f"skipped: {record['authHelpText']}\n")
+            return
+        write_record(record)
+        print(f"wrote {USAGE_DIR / 'openrouter.json'}")
+    else:
+        json.dump(record, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+
+
+if __name__ == "__main__":
+    main()

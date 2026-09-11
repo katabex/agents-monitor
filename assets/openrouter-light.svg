@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 121 384 270">
+  <!-- OpenRouter mark, traced from https://openrouter.ai/favicon/glyph.png
+       (2026-09-11); tile background removed, viewBox tightened to the mark. -->
+  <g transform="translate(0,512) scale(0.1,-0.1)" fill="#000000" stroke="none">
+    <path d="M1780 3895 c-914 -156 -1407 -1146 -979 -1966 159 -302 446 -546 769
+-653 195 -64 99 -60 1505 -63 951 -3 1287 -1 1308 8 63 26 104 111 87 183 -8
+34 -63 94 -424 455 -229 229 -416 419 -416 423 0 3 28 9 63 13 578 62 908 654
+653 1170 -100 201 -264 340 -491 417 l-70 23 -965 2 c-745 1 -982 -2 -1040
+-12z m418 -546 c653 -167 831 -1011 302 -1430 -470 -373 -1180 -113 -1301 475
+-122 589 417 1104 999 955z"/>
+  </g>
+</svg>

@@ -1,11 +1,12 @@
 # Agents Monitor
 
 An [Omarchy](https://omarchy.org) shell plugin: **Claude Code, Codex,
-Fireworks, pi, and OpenCode** usage, limits, and pace in one bar panel.
+Fireworks, pi, OpenCode, and OpenRouter** usage, limits, and pace in one
+bar panel.
 
-Fork of the stock `omarchy.agents` widget (MIT) with built-in **pi agent**
-and **OpenCode** collection — providers the stock panel does not show. When
-installed it replaces the stock widget on the bar.
+Fork of the stock `omarchy.agents` widget (MIT) with built-in **pi agent**,
+**OpenCode**, and **OpenRouter** collection — providers the stock panel does
+not show. When installed it replaces the stock widget on the bar.
 
 ## What it adds over stock
 
@@ -15,7 +16,8 @@ installed it replaces the stock widget on the bar.
 | codex | Codex app-server RPC | as stock |
 | fireworks | prepaid balance estimate | as stock |
 | **pi** | — (local stats only) | `~/.pi/agent/sessions` + `~/.omp/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
-| **opencode** | — (local stats only) | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
+| **opencode** | z.ai GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
+| **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | — (no session history; the tile shows the balance) |
 
 Everything else — the panel UI, per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged.
@@ -55,12 +57,25 @@ config directory.
   assistant message with tokens, writing the same contract to
   `usage/opencode.json`. Token mapping: input ← `tokens.input`, output ←
   `tokens.output` + `tokens.reasoning`, cache read/write ←
-  `tokens.cache.{read,write}` — the sum equals OpenCode's `tokens.total`
+  `tokens.cache.{read,write}` — the sum equals OpenCode's `tokens.total`.
+  Also probes the z.ai GLM Coding Plan quota endpoint (OpenCode here runs
+  on that plan) and maps the windows onto the tab's limit meters;
+  fail-soft (10 s timeout, single attempt, cached payload reused while its
+  windows are open), unknown row types skipped, `--quota-debug` prints the
+  raw payload
+- `bin/omarchy-agent-usage-openrouter` — Python collector; balance meter
+  from OpenRouter's official credits/auth-key endpoints. Key:
+  `$OPENROUTER_API_KEY`, else `{"apiKey": …}` in
+  `~/.config/omarchy/agents/openrouter.json`. Unconfigured runs never
+  clobber a previously collected record
 - `bin/agents-monitor-update` — refresh runner; the panel calls this instead
   of `omarchy-agent-usage-update` directly. Forwards to the stock updater
   (claude/codex/fireworks, honoring `--force`, `--limits-only`, `--except`,
-  and agent-id filters) and runs both bundled collectors under the same
-  rules, so all enabled providers refresh together.
+  and agent-id filters) and runs all three bundled collectors under the
+  same rules, so all enabled providers refresh together. `--limits-only`
+  runs never touch the network-bound bundled probes, so opening the panel
+  never hits the undocumented z.ai endpoint (the 5-minute opencode timer
+  below keeps quota fresh instead).
 - `Main.qml` differs from upstream in exactly two lines: the resolved path of
   the bundled runner, and the command that uses it
 
