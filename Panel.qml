@@ -575,181 +575,220 @@ Panel {
             }
           }
 
-          // ---------- Balance / limits ----------
-          PanelSeparator {
-            visible: balanceSection.visible || limitsSection.visible
-            foreground: root.foreground
-          }
-
-          Column {
-            id: balanceSection
-            visible: !!root.balance
+          // ---------- Subscription card ----------
+          // Balance and limit meters are the plan's state: account-wide
+          // truth, the same on every machine. Carded separately from the
+          // usage card below, which tells what actually ran. Height binds
+          // to implicitHeight explicitly: a plain Rectangle inside a
+          // positioner does not reliably follow its implicit size, and a
+          // zero-height card silently drops out of the column.
+          BorderSurface {
+            id: subscriptionCard
+            // Root-derived: a parent binding over child ids evaluates once
+            // before the children's own bindings settle and never re-runs
+            // reliably (same trap as the tab strip's natural width).
+            visible: root.limits.length > 0 || root.balance !== null
             width: parent.width
-            spacing: Style.space(10)
+            implicitHeight: subscriptionColumn.implicitHeight + subscriptionColumn.y * 2
+            height: implicitHeight
+            color: root.alpha(root.foreground, 0.04)
+            borderSpec: Border.flat(root.alpha(root.foreground, 0.15), 1)
+            radius: Style.cornerRadius
 
-            // The meter shows what is left, not what is used: a prepaid
-            // account drains toward empty rather than filling toward a cap.
-            readonly property real ratio: root.balance && root.balance.funded > 0
-              ? root.clamp(root.balance.remaining / root.balance.funded, 0, 1)
-              : -1
-
-            PanelSectionHeader {
-              width: parent.width
-              text: "BALANCE"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Item {
-              width: parent.width
-              implicitHeight: Math.max(balanceLabel.implicitHeight, balanceValue.implicitHeight)
+            Column {
+              id: subscriptionColumn
+              x: Style.space(12)
+              y: Style.space(12)
+              width: parent.width - Style.space(24)
+              spacing: Style.space(12)
 
               Text {
-                id: balanceLabel
-                text: "Prepaid credits"
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-              }
-
-              Text {
-                id: balanceValue
+                width: parent.width
                 textFormat: Text.PlainText
-                text: root.balance ? root.formatMoney(root.balance.remaining, root.balance.currency) : ""
-                color: root.balanceAlarming ? root.urgent : root.foreground
+                text: "SUBSCRIPTION"
+                color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
               }
-            }
 
-            Meter {
-              visible: balanceSection.ratio >= 0
-              width: parent.width
-              value: balanceSection.ratio
-              alarming: root.balanceAlarming
-            }
+              Column {
+                id: balanceSection
+                visible: !!root.balance
+                width: parent.width
+                spacing: Style.space(10)
 
-            Text {
-              textFormat: Text.PlainText
-              visible: text !== ""
-              width: parent.width
-              text: root.balanceDetailText(root.balance)
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
-          }
+                // The meter shows what is left, not what is used: a prepaid
+                // account drains toward empty rather than filling toward a cap.
+                readonly property real ratio: root.balance && root.balance.funded > 0
+                  ? root.clamp(root.balance.remaining / root.balance.funded, 0, 1)
+                  : -1
 
-          Column {
-            id: limitsSection
-            visible: root.limits.length > 0
-            width: parent.width
-            spacing: Style.space(10)
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "BALANCE"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
 
-            PanelSectionHeader {
-              text: "LIMITS"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
+                Item {
+                  width: parent.width
+                  implicitHeight: Math.max(balanceLabel.implicitHeight, balanceValue.implicitHeight)
 
-            Repeater {
-              model: root.limits
+                  Text {
+                    id: balanceLabel
+                    text: "Prepaid credits"
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
 
-              LimitRow {
-                required property var modelData
-                width: limitsSection.width
-                window: modelData
+                  Text {
+                    id: balanceValue
+                    textFormat: Text.PlainText
+                    text: root.balance ? root.formatMoney(root.balance.remaining, root.balance.currency) : ""
+                    color: root.balanceAlarming ? root.urgent : root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                }
+
+                Meter {
+                  visible: balanceSection.ratio >= 0
+                  width: parent.width
+                  value: balanceSection.ratio
+                  alarming: root.balanceAlarming
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  visible: text !== ""
+                  width: parent.width
+                  text: root.balanceDetailText(root.balance)
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
               }
-            }
-          }
 
-          // ---------- Usage ----------
-          // The group boundary: everything above is subscription state
-          // (balance, limit windows — account truth, the same on every
-          // machine); everything below is what actually ran. The title
-          // names whose truth the charts tell, from the record's scope;
-          // with no charts at all the whole group collapses out.
-          PanelSeparator {
-            visible: usageSection.visible || modelSection.visible
-            foreground: root.foreground
-          }
+              Column {
+                id: limitsSection
+                visible: root.limits.length > 0
+                width: parent.width
+                spacing: Style.space(10)
 
-          Text {
-            visible: usageSection.visible || modelSection.visible
-            width: parent.width
-            textFormat: Text.PlainText
-            text: root.usageGroupTitle(root.provider)
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-          }
+                PanelSectionHeader {
+                  text: "LIMITS"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
 
-          Column {
-            id: usageSection
-            visible: !!root.provider && root.provider.recentDays && root.provider.recentDays.length > 0
-            width: parent.width
-            spacing: Style.spacing.md
+                Repeater {
+                  model: root.limits
 
-            readonly property var days: root.provider ? (root.provider.recentDays || []) : []
-            readonly property real peak: Math.max(1, root.weekPeak(root.provider))
-
-            PanelSectionHeader {
-              width: parent.width
-              text: "TOKENS BY DAY"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Repeater {
-              model: usageSection.days
-
-              DayRow {
-                required property var modelData
-                required property int index
-
-                width: usageSection.width
-                day: modelData
-                ratio: Number(modelData.messageCount || 0) / usageSection.peak
-                // By date, not by position: the Claude stats-cache fallback can
-                // hand us a window that stops short of today.
-                today: String(modelData.date || "") === root.todayDate()
+                  LimitRow {
+                    required property var modelData
+                    width: limitsSection.width
+                    window: modelData
+                  }
+                }
               }
             }
           }
 
-          // ---------- Models ----------
-          PanelSeparator {
-            visible: modelSection.visible
-            foreground: root.foreground
-          }
-
-          Column {
-            id: modelSection
+          // ---------- Usage card ----------
+          // The day/model charts tell what actually ran, and the title
+          // says whose truth they tell: machine-local sessions,
+          // account-wide analytics, or a cross-device merge. Same height
+          // note as the subscription card above.
+          BorderSurface {
+            id: usageCard
             visible: root.models.length > 0
+              || (!!root.provider && root.provider.recentDays && root.provider.recentDays.length > 0)
             width: parent.width
-            spacing: Style.spacing.md
+            implicitHeight: usageColumn.implicitHeight + usageColumn.y * 2
+            height: implicitHeight
+            color: root.alpha(root.foreground, 0.04)
+            borderSpec: Border.flat(root.alpha(root.foreground, 0.15), 1)
+            radius: Style.cornerRadius
 
-            PanelSectionHeader {
-              width: parent.width
-              text: "TOKENS BY MODEL"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
+            Column {
+              id: usageColumn
+              x: Style.space(12)
+              y: Style.space(12)
+              width: parent.width - Style.space(24)
+              spacing: Style.space(12)
 
-            Repeater {
-              model: root.models
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.usageGroupTitle(root.provider)
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
 
-              ModelRow {
-                required property var modelData
-                width: modelSection.width
-                row: modelData
-                // Scaled to the heaviest model, so the top row is always full —
-                // the same scale-to-peak the weekly chart uses for its busiest day.
-                share: modelData.total / Math.max(1, root.models[0].total)
+              Column {
+                id: usageSection
+                visible: !!root.provider && root.provider.recentDays && root.provider.recentDays.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var days: root.provider ? (root.provider.recentDays || []) : []
+                readonly property real peak: Math.max(1, root.weekPeak(root.provider))
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "TOKENS BY DAY"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: usageSection.days
+
+                  DayRow {
+                    required property var modelData
+                    required property int index
+
+                    width: usageSection.width
+                    day: modelData
+                    ratio: Number(modelData.messageCount || 0) / usageSection.peak
+                    // By date, not by position: the Claude stats-cache fallback can
+                    // hand us a window that stops short of today.
+                    today: String(modelData.date || "") === root.todayDate()
+                  }
+                }
+              }
+
+              Column {
+                id: modelSection
+                visible: root.models.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "TOKENS BY MODEL"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: root.models
+
+                  ModelRow {
+                    required property var modelData
+                    width: modelSection.width
+                    row: modelData
+                    // Scaled to the heaviest model, so the top row is always full —
+                    // the same scale-to-peak the weekly chart uses for its busiest day.
+                    share: modelData.total / Math.max(1, root.models[0].total)
+                  }
+                }
               }
             }
           }

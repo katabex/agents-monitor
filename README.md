@@ -28,11 +28,13 @@ divided the strip into equal cells, which clipped names like "OpenRouter"
 at six providers in a 380 px panel; (2) the urgent status box gates its
 visibility on `authHelpText` (its content) instead of `usageStatusText` —
 stock's pairing rendered an empty red box whenever a provider had a
-healthy status line and no help text; (3) the day/model charts sit under
-a group title naming whose truth they tell — `USAGE — ACCOUNT` for
-account-scoped records (`scope: "account"`: OpenRouter, Fireworks) vs
-`USAGE — THIS MACHINE` for local session stats (or `— N DEVICES` when
-sync merges machines); with no charts at all the group collapses out.
+healthy status line and no help text; (3) the content below the
+status box splits into two cards: a SUBSCRIPTION card (balance + limit
+meters — account truth) and a usage card (day/model charts) titled by
+whose truth they tell — `USAGE — ACCOUNT` for account-scoped records
+(`scope: "account"`: OpenRouter, Fireworks) vs `USAGE — THIS MACHINE` for
+local session stats (or `— N DEVICES` when sync merges machines); a card
+with nothing to show collapses out.
 
 ## Install
 
