@@ -21,20 +21,17 @@ not show. When installed it replaces the stock widget on the bar.
 
 Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The QML
-divergences: (1) the provider tab strip sizes tabs to their name text
-(natural width plus the control's own padding) and grows the panel to keep
-the strip on one row, wrapping only on screens too narrow for it — stock
-divided the strip into equal cells, which clipped names like "OpenRouter"
-at six providers in a 380 px panel; (2) the urgent status box gates its
-visibility on `authHelpText` (its content) instead of `usageStatusText` —
-stock's pairing rendered an empty red box whenever a provider had a
-healthy status line and no help text; (3) the content below the
-status box splits into two cards: a SUBSCRIPTION card (balance + limit
-meters — account truth) and a usage card (day/model charts) titled by
-whose truth they tell — `USAGE — ACCOUNT` for account-scoped records
-(`scope: "account"`: OpenRouter, Fireworks) vs `USAGE — THIS MACHINE` for
-local session stats (or `— N DEVICES` when sync merges machines); a card
-with nothing to show collapses out.
+divergences: the panel content is a two-card, two-strip design — a
+SUBSCRIPTION card (one tab per thing you pay for, named by company:
+Anthropic, OpenAI, z.ai, OpenRouter, Fireworks — balance + limit meters)
+and an AGENT card (one tab per thing that runs: Claude Code, Codex,
+OpenCode, pi, plus account-scoped analytics tabs), each switching
+independently. Strips size tabs to their name text and grow the panel to
+keep one row; the usage title names whose truth the charts tell
+(`USAGE — ACCOUNT` vs `USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent
+status box gates on `authHelpText` (its content); empty cards collapse
+out; keyboard: left/right cycles the focused card, up/down scrolls and
+hands focus between cards at the scroll edges.
 
 ## Install
 

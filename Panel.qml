@@ -19,27 +19,74 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property var providers: usage.enabledProviders
-  // The selection follows the provider, not the slot it happens to sit in: a
+
+  // The panel reads the same records along two independent axes: what you
+  // pay for (services — balance and limit windows) and what ran (agents —
+  // session stats). A provider earns a tab in a card by having that kind
+  // of data: claude/codex/opencode sit in both strips, pi only among
+  // agents, and the two cards switch independently.
+  readonly property var serviceProviders: {
+    var rev = providers
+    var result = []
+    for (var i = 0; i < providers.length; i++) {
+      var p = providers[i]
+      if ((p.limits && p.limits.length > 0) || p.balance)
+        result.push(p)
+    }
+    return result
+  }
+  readonly property var agentProviders: {
+    var rev = providers
+    var result = []
+    for (var i = 0; i < providers.length; i++) {
+      var p = providers[i]
+      var days = p.recentDays || []
+      var has = false
+      for (var d = 0; d < days.length; d++)
+        if (Number(days[d].messageCount) > 0) { has = true; break }
+      if (!has) {
+        var usageModels = p.modelUsage || {}
+        for (var k in usageModels) { has = true; break }
+      }
+      if (has) result.push(p)
+    }
+    return result
+  }
+
+  // Selections follow the provider, not the slot it happens to sit in: a
   // provider whose first scan lands while the panel is open would otherwise
   // shift the list underneath you and swap out what you were reading.
-  property string selectedProviderId: ""
-  readonly property int providerIndex: {
-    for (var i = 0; i < providers.length; i++)
-      if (providers[i].providerId === selectedProviderId) return i
+  property string selectedServiceId: ""
+  property string selectedAgentId: ""
+  readonly property int serviceIndex: {
+    for (var i = 0; i < serviceProviders.length; i++)
+      if (serviceProviders[i].providerId === selectedServiceId) return i
     return 0
   }
-  readonly property var provider: providers.length > 0 ? providers[providerIndex] : null
+  readonly property int agentIndex: {
+    for (var i = 0; i < agentProviders.length; i++)
+      if (agentProviders[i].providerId === selectedAgentId) return i
+    return 0
+  }
+  readonly property var service: serviceProviders.length > 0 ? serviceProviders[serviceIndex] : null
+  readonly property var agent: agentProviders.length > 0 ? agentProviders[agentIndex] : null
+
+  // Legacy alias: bar-icon alarming and the IPC cursor follow the service
+  // card — its windows are what stop the next prompt.
+  readonly property var provider: service
 
   property bool cursorActive: false
+  // Which card the arrow keys drive; mouse clicks set it themselves.
+  property bool serviceFocus: true
 
   // Countdowns and "updated" read this instead of Date.now() so the
   // panel keeps telling the truth while it sits open.
   property double nowMs: Date.now()
 
-  readonly property var limits: limitWindows(provider)
-  readonly property var models: modelRows(provider)
-  readonly property var headline: bindingWindow(provider)
-  readonly property var balance: provider ? (provider.balance || null) : null
+  readonly property var limits: limitWindows(service)
+  readonly property var models: modelRows(agent)
+  readonly property var headline: bindingWindow(service)
+  readonly property var balance: service ? (service.balance || null) : null
   // A prepaid account runs low the way a subscription window fills up: the
   // last 10% of the funded credits lights the same alarm.
   readonly property bool balanceAlarming: !!balance && balance.funded > 0
@@ -49,11 +96,30 @@ Panel {
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
   function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
 
-  function selectProvider(index) {
-    if (providers.length === 0) return
-    var wrapped = ((index % providers.length) + providers.length) % providers.length
-    selectedProviderId = providers[wrapped].providerId
+  // The service card names the company you pay; the agent card names the
+  // tool that ran. Same record, two honest labels.
+  function serviceName(p) {
+    if (!p) return ""
+    var map = { claude: "Anthropic", codex: "OpenAI", opencode: "z.ai" }
+    return map[String(p.providerId)] || p.providerName
   }
+  function agentName(p) {
+    if (!p) return ""
+    var map = { claude: "Claude Code" }
+    return map[String(p.providerId)] || p.providerName
+  }
+
+  function selectService(index) {
+    if (serviceProviders.length === 0) return
+    var wrapped = ((index % serviceProviders.length) + serviceProviders.length) % serviceProviders.length
+    selectedServiceId = serviceProviders[wrapped].providerId
+  }
+  function selectAgent(index) {
+    if (agentProviders.length === 0) return
+    var wrapped = ((index % agentProviders.length) + agentProviders.length) % agentProviders.length
+    selectedAgentId = agentProviders[wrapped].providerId
+  }
+  function selectProvider(index) { selectService(index) }
 
   function refreshNow() {
     usage.refreshAll(true)
@@ -314,7 +380,8 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  onProviderIndexChanged: if (panelFlick) panelFlick.contentY = 0
+  onServiceIndexChanged: if (panelFlick) panelFlick.contentY = 0
+  onAgentIndexChanged: if (panelFlick) panelFlick.contentY = 0
   onOpenedChanged: if (opened) {
     cursorActive = false
     nowMs = Date.now()
@@ -345,7 +412,7 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): string { root.refreshNow(); return "ok" }
-    function next(): string { root.selectProvider(root.providerIndex + 1); return "ok" }
+    function next(): string { root.selectService(root.serviceIndex + 1); return "ok" }
   }
 
   BarIconButton {
@@ -356,7 +423,7 @@ Panel {
     active: root.alarming
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton) root.launchAgent()
-      else if (buttonCode === Qt.MiddleButton) root.selectProvider(root.providerIndex + 1)
+      else if (buttonCode === Qt.MiddleButton) root.selectService(root.serviceIndex + 1)
       else root.toggle()
     }
   }
@@ -369,7 +436,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Math.max(Style.space(380),
-      providerSwitch.visible ? providerSwitch.naturalRowWidth + Style.space(8) : 0))
+      Math.max(serviceStrip.naturalRowWidth, agentStrip.naturalRowWidth) + Style.space(8)))
     // Taller than the control panels on purpose: this one is a dashboard,
     // and the whole point is reading limits and history without scrolling —
     // so the card adopts to the content's full height and only the screen
@@ -384,11 +451,21 @@ Panel {
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) {
           root.cursorActive = true
-          root.selectProvider(root.providerIndex + dx)
+          if (root.serviceFocus) root.selectService(root.serviceIndex + dx)
+          else root.selectAgent(root.agentIndex + dx)
         }
-        if (dy !== 0)
-          panelFlick.contentY = root.clamp(panelFlick.contentY + dy * Style.space(56), 0,
-                                           Math.max(0, panelFlick.contentHeight - panelFlick.height))
+        if (dy !== 0) {
+          // Vertical keys scroll first; at the scroll edges they hand the
+          // tab focus to the other card.
+          if (dy < 0 && !root.serviceFocus) {
+            root.serviceFocus = true
+          } else if (dy > 0 && root.serviceFocus && panelFlick.atYEnd) {
+            root.serviceFocus = false
+          } else {
+            panelFlick.contentY = root.clamp(panelFlick.contentY + dy * Style.space(56), 0,
+                                             Math.max(0, panelFlick.contentHeight - panelFlick.height))
+          }
+        }
       }
       onActivateRequested: root.refreshNow()
       onCloseRequested: root.close()
@@ -411,58 +488,6 @@ Panel {
           width: panelFlick.width
           spacing: Style.space(12)
 
-          // ---------- Hero: provider mark · name · plan ----------
-          PanelHero {
-            id: hero
-            visible: !!root.provider
-            width: parent.width
-            title: root.provider ? root.provider.providerName : ""
-            meta: root.heroMeta(root.provider)
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-
-            iconComponent: Component {
-              Item {
-                id: heroMark
-                property var candidates: root.iconCandidatesForProvider(root.provider, root.surface)
-                // Provider objects are rebuilt on every refresh, which churns the
-                // array's identity without changing its content. Restart the fallback
-                // walk only when the URLs change: re-pointing source at a URL whose
-                // load already failed emits no statusChanged, so an identity-only
-                // reset would strand the walker on a missing -light twin.
-                property string candidatesKey: candidates.join("\n")
-                property int candidateIndex: 0
-                onCandidatesKeyChanged: candidateIndex = 0
-
-                width: Style.font.display
-                height: Style.font.display
-
-                Image {
-                  id: heroMarkImage
-                  anchors.fill: parent
-                  source: heroMark.candidateIndex < heroMark.candidates.length ? heroMark.candidates[heroMark.candidateIndex] : ""
-                  sourceSize.width: Style.font.display * 2
-                  sourceSize.height: Style.font.display * 2
-                  fillMode: Image.PreserveAspectFit
-                  // Advancing source from inside its own status change trips the
-                  // binding-loop detector; defer the step one tick.
-                  onStatusChanged: if (status === Image.Error && heroMark.candidateIndex < heroMark.candidates.length)
-                    Qt.callLater(function() { heroMark.candidateIndex++ })
-                }
-
-                Text {
-                  textFormat: Text.PlainText
-                  anchors.centerIn: parent
-                  visible: heroMarkImage.status !== Image.Ready
-                  text: button.text
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.display
-                }
-              }
-            }
-          }
-
           Text {
             visible: root.providers.length === 0
             width: parent.width
@@ -475,128 +500,22 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          // ---------- Provider switch ----------
-          // Content-fitted tabs: each button takes its natural width (text +
-          // the control's own padding), so provider names never clip — equal
-          // cells did at six providers in a 380 px panel. The panel's width
-          // grows to keep the strip on one row when the screen allows it
-          // (see contentWidth above); on narrower screens Flow wraps to a
-          // second row instead of squeezing the names.
-          Flow {
-            id: providerSwitch
-            visible: root.providers.length > 1
-            width: parent.width
-            spacing: Style.spacing.md
-
-            // Single-row width of the strip at natural button sizes.
-            // Computed imperatively from the buttons themselves — binding
-            // over `children` never re-evaluates when the Repeater (re)creates
-            // its items, so the buttons report in via onCompleted/
-            // onImplicitWidthChanged/onDestruction instead. Independent of
-            // layout width, so the contentWidth binding above cannot loop.
-            // High-water mark: providers stream in one by one, so the live
-            // sum dips mid-population; never shrink it and the panel stops
-            // wiggling on every refresh. A smaller strip just leaves slack;
-            // a larger one still grows the panel.
-            property real naturalRowWidth: 0
-            function syncNaturalWidth() {
-              var total = 0
-              var count = 0
-              for (var i = 0; i < children.length; i++) {
-                total += children[i].implicitWidth || 0
-                count++
-              }
-              var candidate = count > 1 ? total + spacing * (count - 1) : total
-              if (candidate > naturalRowWidth)
-                naturalRowWidth = candidate
-            }
-
-            Repeater {
-              model: root.providers
-
-              // Delegates complete before the Repeater parents them into
-              // the Flow, so a button cannot measure itself at
-              // Component.onCompleted. itemAdded/itemRemoved fire after
-              // parenting; the deferred call lands once bindings have
-              // settled. onImplicitWidthChanged covers later resizes.
-              onItemAdded: function(index, item) { Qt.callLater(providerSwitch.syncNaturalWidth) }
-              onItemRemoved: function(index, item) { providerSwitch.syncNaturalWidth() }
-
-              Button {
-                required property var modelData
-                required property int index
-
-                onImplicitWidthChanged: providerSwitch.syncNaturalWidth()
-
-                text: modelData.providerName
-                selected: index === root.providerIndex
-                hasCursor: root.cursorActive && index === root.providerIndex
-                bordered: true
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                fontSize: Style.font.bodySmall
-                verticalPadding: Style.spacing.controlPaddingY
-                onClicked: {
-                  root.cursorActive = true
-                  root.selectProvider(index)
-                }
-                onHovered: function(isHovered) { if (isHovered) root.cursorActive = true }
-              }
-            }
-          }
-
-          // ---------- Status ----------
+          // ---------- Service card ----------
+          // One tab per thing you pay for; the strip names the company
+          // (Anthropic, not Claude Code). Balance and limit meters are the
+          // account's state — the same truth on every machine. Selecting a
+          // tab here never disturbs the agent card below.
           BorderSurface {
-            // The box's content is authHelpText, so it must gate on
-            // authHelpText too: stock gated on usageStatusText, which these
-            // collectors also use as the hero's informational meta line —
-            // that pairing rendered an empty red box whenever a provider
-            // had a healthy status line and no help text.
-            visible: !!root.provider && String(root.provider.authHelpText || "") !== ""
+            visible: root.serviceProviders.length > 0
             width: parent.width
-            implicitHeight: statusText.implicitHeight + Style.spacing.xl * 2
-            color: root.alpha(root.urgent, 0.10)
-            borderSpec: Border.flat(root.alpha(root.urgent, 0.35), 1)
-            radius: Style.cornerRadius
-
-            Text {
-              id: statusText
-              textFormat: Text.PlainText
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(12)
-              anchors.rightMargin: Style.space(12)
-              text: root.provider ? String(root.provider.authHelpText || "") : ""
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.WordWrap
-            }
-          }
-
-          // ---------- Subscription card ----------
-          // Balance and limit meters are the plan's state: account-wide
-          // truth, the same on every machine. Carded separately from the
-          // usage card below, which tells what actually ran. Height binds
-          // to implicitHeight explicitly: a plain Rectangle inside a
-          // positioner does not reliably follow its implicit size, and a
-          // zero-height card silently drops out of the column.
-          BorderSurface {
-            id: subscriptionCard
-            // Root-derived: a parent binding over child ids evaluates once
-            // before the children's own bindings settle and never re-runs
-            // reliably (same trap as the tab strip's natural width).
-            visible: root.limits.length > 0 || root.balance !== null
-            width: parent.width
-            implicitHeight: subscriptionColumn.implicitHeight + subscriptionColumn.y * 2
+            implicitHeight: serviceColumn.implicitHeight + serviceColumn.y * 2
             height: implicitHeight
             color: root.alpha(root.foreground, 0.04)
             borderSpec: Border.flat(root.alpha(root.foreground, 0.15), 1)
             radius: Style.cornerRadius
 
             Column {
-              id: subscriptionColumn
+              id: serviceColumn
               x: Style.space(12)
               y: Style.space(12)
               width: parent.width - Style.space(24)
@@ -606,6 +525,89 @@ Panel {
                 width: parent.width
                 textFormat: Text.PlainText
                 text: "SUBSCRIPTION"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Flow {
+                id: serviceStrip
+                width: parent.width
+                spacing: Style.spacing.md
+
+              property real naturalRowWidth: 0
+              function syncNaturalWidth() {
+                var total = 0
+                var count = 0
+                for (var i = 0; i < children.length; i++) {
+                  total += children[i].implicitWidth || 0
+                  count++
+                }
+                var candidate = count > 1 ? total + spacing * (count - 1) : total
+                if (candidate > naturalRowWidth)
+                  naturalRowWidth = candidate
+              }
+
+                Repeater {
+                  model: root.serviceProviders
+
+                  onItemAdded: function(index, item) { Qt.callLater(serviceStrip.syncNaturalWidth) }
+                  onItemRemoved: function(index, item) { serviceStrip.syncNaturalWidth() }
+
+                  Button {
+                    required property var modelData
+                    required property int index
+
+                    onImplicitWidthChanged: serviceStrip.syncNaturalWidth()
+
+                    text: root.serviceName(modelData)
+                    selected: index === root.serviceIndex
+                    hasCursor: root.cursorActive && root.serviceFocus && index === root.serviceIndex
+                    bordered: true
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.bodySmall
+                    verticalPadding: Style.spacing.controlPaddingY
+                    onClicked: {
+                      root.cursorActive = true
+                      root.serviceFocus = true
+                      root.selectService(index)
+                    }
+                    onHovered: function(isHovered) { if (isHovered) root.cursorActive = true }
+                  }
+                }
+              }
+
+              BorderSurface {
+                visible: !!root.service && String(root.service.authHelpText || "") !== ""
+                width: parent.width
+                implicitHeight: serviceStatusText.implicitHeight + Style.spacing.xl * 2
+                height: implicitHeight
+                color: root.alpha(root.urgent, 0.10)
+                borderSpec: Border.flat(root.alpha(root.urgent, 0.35), 1)
+                radius: Style.cornerRadius
+
+                Text {
+                  id: serviceStatusText
+                  textFormat: Text.PlainText
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  anchors.leftMargin: Style.space(12)
+                  anchors.rightMargin: Style.space(12)
+                  text: root.service ? String(root.service.authHelpText || "") : ""
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+              }
+
+              Text {
+                width: parent.width
+                visible: text !== ""
+                textFormat: Text.PlainText
+                text: root.heroMeta(root.service)
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -696,18 +698,17 @@ Panel {
                   }
                 }
               }
+
             }
           }
 
-          // ---------- Usage card ----------
-          // The day/model charts tell what actually ran, and the title
-          // says whose truth they tell: machine-local sessions,
-          // account-wide analytics, or a cross-device merge. Same height
-          // note as the subscription card above.
+          // ---------- Agent card ----------
+          // One tab per thing that runs; the title names whose truth the
+          // charts tell (machine-local sessions, account-wide analytics,
+          // or a cross-device merge). Selecting a tab here never disturbs
+          // the service card above.
           BorderSurface {
-            id: usageCard
-            visible: root.models.length > 0
-              || (!!root.provider && root.provider.recentDays && root.provider.recentDays.length > 0)
+            visible: root.agentProviders.length > 0
             width: parent.width
             implicitHeight: usageColumn.implicitHeight + usageColumn.y * 2
             height: implicitHeight
@@ -725,20 +726,68 @@ Panel {
               Text {
                 width: parent.width
                 textFormat: Text.PlainText
-                text: root.usageGroupTitle(root.provider)
+                text: root.usageGroupTitle(root.agent)
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
               }
 
-              Column {
-                id: usageSection
-                visible: !!root.provider && root.provider.recentDays && root.provider.recentDays.length > 0
+              Flow {
+                id: agentStrip
                 width: parent.width
                 spacing: Style.spacing.md
 
-                readonly property var days: root.provider ? (root.provider.recentDays || []) : []
-                readonly property real peak: Math.max(1, root.weekPeak(root.provider))
+              property real naturalRowWidth: 0
+              function syncNaturalWidth() {
+                var total = 0
+                var count = 0
+                for (var i = 0; i < children.length; i++) {
+                  total += children[i].implicitWidth || 0
+                  count++
+                }
+                var candidate = count > 1 ? total + spacing * (count - 1) : total
+                if (candidate > naturalRowWidth)
+                  naturalRowWidth = candidate
+              }
+
+                Repeater {
+                  model: root.agentProviders
+
+                  onItemAdded: function(index, item) { Qt.callLater(agentStrip.syncNaturalWidth) }
+                  onItemRemoved: function(index, item) { agentStrip.syncNaturalWidth() }
+
+                  Button {
+                    required property var modelData
+                    required property int index
+
+                    onImplicitWidthChanged: agentStrip.syncNaturalWidth()
+
+                    text: root.agentName(modelData)
+                    selected: index === root.agentIndex
+                    hasCursor: root.cursorActive && !root.serviceFocus && index === root.agentIndex
+                    bordered: true
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.bodySmall
+                    verticalPadding: Style.spacing.controlPaddingY
+                    onClicked: {
+                      root.cursorActive = true
+                      root.serviceFocus = false
+                      root.selectAgent(index)
+                    }
+                    onHovered: function(isHovered) { if (isHovered) root.cursorActive = true }
+                  }
+                }
+              }
+
+              Column {
+                id: usageSection
+                visible: !!root.agent && root.agent.recentDays && root.agent.recentDays.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var days: root.agent ? (root.agent.recentDays || []) : []
+                readonly property real peak: Math.max(1, root.weekPeak(root.agent))
 
                 PanelSectionHeader {
                   width: parent.width
@@ -790,6 +839,7 @@ Panel {
                   }
                 }
               }
+
             }
           }
 
