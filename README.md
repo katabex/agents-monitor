@@ -23,18 +23,23 @@ Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The QML
 divergences: the panel content is a two-card, two-strip design — a
 SUBSCRIPTION card (one tab per thing you pay for, named by company:
-Anthropic, OpenAI, z.ai, OpenRouter, Fireworks — balance + limit meters)
+Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks — balance + limit meters)
 and an AGENT card (one tab per thing that runs: Claude Code, Codex,
-OpenCode, pi, plus account-scoped analytics tabs), each switching
-independently. The subscription card's header carries the selected
-service's mark (the z.ai the Z.ai tab shows the OpenCode mark until the z.ai quota
-gets its own record). Strips size tabs to their name text and grow the panel to
-keep one row; the usage title names whose truth the charts tell
-(`USAGE — ACCOUNT` vs `USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent
-status box shows only when a record sets both `usageStatusText` and
-`authHelpText` — stock collectors leave a stale help text on healthy
-records, so help alone would nag; empty cards collapse out; keyboard: left/right cycles the focused card, up/down scrolls and
-hands focus between cards at the scroll edges.
+OpenCode, pi — account-scoped providers are services, never agents), each
+switching independently. The subscription card's header carries the
+selected service's mark; the Z.ai tab shows Z.ai's own mark (traced from
+the official logo) even though its data rides the opencode record until
+Z.ai gets its own. Account-scoped services (OpenRouter, Fireworks) carry
+their day/model charts inside the service card under `USAGE — ACCOUNT` —
+their tokens are credit burn, subscription data. Strips size tabs to
+their name text and grow the panel to keep one row; the usage title names
+whose truth the charts tell (`USAGE — ACCOUNT` vs
+`USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent status box shows only
+when a record sets both `usageStatusText` and `authHelpText` (stock
+collectors leave a stale help text on healthy records, so help alone
+would nag); empty cards collapse out; keyboard: left/right cycles the
+focused card, up/down scrolls and hands focus between cards at the scroll
+edges.
 
 ## Install
 

@@ -406,13 +406,23 @@ Panel {
   // Marks resolve by convention, so a new agent's data file needs nothing
   // from this panel: assets/<id>.svg if it ships one, the module's bar glyph
   // if it doesn't.
-  function iconCandidatesForProvider(p, surfaceColor) {
-    if (!p) return []
+  function markCandidates(id, surfaceColor) {
     var candidates = []
     if (colorLuminance(surfaceColor || Color.background) >= 0.5)
-      candidates.push(Qt.resolvedUrl("assets/" + p.providerId + "-light.svg"))
-    candidates.push(Qt.resolvedUrl("assets/" + p.providerId + ".svg"))
+      candidates.push(Qt.resolvedUrl("assets/" + id + "-light.svg"))
+    candidates.push(Qt.resolvedUrl("assets/" + id + ".svg"))
     return candidates
+  }
+
+  function iconCandidatesForProvider(p, surfaceColor) {
+    return p ? markCandidates(String(p.providerId), surfaceColor) : []
+  }
+
+  // The Z.ai tab's data rides the opencode record until z.ai gets its
+  // own, but its mark is Z.ai's, not OpenCode's.
+  function serviceMarkId(p) {
+    var id = String(p ? p.providerId : "")
+    return id === "opencode" ? "zai" : id
   }
 
   // Nothing to report, nothing in the bar: Bar.qml collapses a slot whose item
@@ -574,7 +584,7 @@ Panel {
                 // load already failed emits no statusChanged.
                 Item {
                   id: serviceMark
-                  property var candidates: root.iconCandidatesForProvider(root.service, root.surface)
+                  property var candidates: root.markCandidates(root.serviceMarkId(root.service), root.surface)
                   property string candidatesKey: candidates.join("\n")
                   property int candidateIndex: 0
                   onCandidatesKeyChanged: candidateIndex = 0
