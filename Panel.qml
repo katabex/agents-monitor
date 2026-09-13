@@ -597,32 +597,9 @@ Panel {
                 width: parent.width
                 spacing: Style.space(8)
 
-                // The selected service's mark. Candidates (light variant
-                // first on light surfaces) restart the fallback walk only
-                // when the URLs change: provider objects are rebuilt on
-                // every refresh, and re-pointing source at a URL whose
-                // load already failed emits no statusChanged.
-                Item {
-                  id: serviceMark
-                  property var candidates: root.markCandidates(root.serviceMarkId(root.service), root.surface)
-                  property string candidatesKey: candidates.join("\n")
-                  property int candidateIndex: 0
-                  onCandidatesKeyChanged: candidateIndex = 0
-
-                  width: Style.space(18)
-                  height: Style.space(18)
-
-                  Image {
-                    anchors.fill: parent
-                    source: serviceMark.candidateIndex < serviceMark.candidates.length ? serviceMark.candidates[serviceMark.candidateIndex] : ""
-                    sourceSize.width: Style.space(36)
-                    sourceSize.height: Style.space(36)
-                    fillMode: Image.PreserveAspectFit
-                    // Advancing source from inside its own status change
-                    // trips the binding-loop detector; defer one tick.
-                    onStatusChanged: if (status === Image.Error && serviceMark.candidateIndex < serviceMark.candidates.length)
-                      Qt.callLater(function() { serviceMark.candidateIndex++ })
-                  }
+                // The selected service's mark.
+                ProviderMark {
+                  markId: root.serviceMarkId(root.service)
                 }
 
                 Text {
@@ -844,13 +821,25 @@ Panel {
               width: parent.width - Style.space(24)
               spacing: Style.space(12)
 
-              Text {
+              // The selected agent's mark leads the usage title: the card
+              // speaks for one tool, and the mark says which before the
+              // scope text does.
+              Row {
                 width: parent.width
-                textFormat: Text.PlainText
-                text: root.usageGroupTitle(root.agent)
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                spacing: Style.space(8)
+
+                ProviderMark {
+                  markId: root.agent ? String(root.agent.providerId) : ""
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.usageGroupTitle(root.agent)
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
               }
 
               Flow {
@@ -951,6 +940,39 @@ Panel {
           }
         }
       }
+    }
+  }
+
+  // A provider's mark, resolving assets/<id>.svg (light twin first on light
+  // surfaces) with a fallback walk. Candidates restart the walk only when
+  // the URLs change: provider objects are rebuilt on every refresh, and
+  // re-pointing source at a URL whose load already failed emits no
+  // statusChanged. Extracted from the service header when the agent card's
+  // usage title grew a mark of its own; the evaluate-once trap forbids
+  // parents from binding over child ids, so the walk lives on this item.
+  component ProviderMark: Item {
+    id: mark
+    property string markId: ""
+    property real markSize: Style.space(18)
+
+    property var candidates: root.markCandidates(markId, root.surface)
+    property string candidatesKey: candidates.join("\n")
+    property int candidateIndex: 0
+    onCandidatesKeyChanged: candidateIndex = 0
+
+    width: markSize
+    height: markSize
+
+    Image {
+      anchors.fill: parent
+      source: mark.candidateIndex < mark.candidates.length ? mark.candidates[mark.candidateIndex] : ""
+      sourceSize.width: mark.markSize * 2
+      sourceSize.height: mark.markSize * 2
+      fillMode: Image.PreserveAspectFit
+      // Advancing source from inside its own status change trips the
+      // binding-loop detector; defer one tick.
+      onStatusChanged: if (status === Image.Error && mark.candidateIndex < mark.candidates.length)
+        Qt.callLater(function() { mark.candidateIndex++ })
     }
   }
 

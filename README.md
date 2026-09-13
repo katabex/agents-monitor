@@ -33,7 +33,9 @@ Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks — balance + limit meters)
 and an AGENT card (one tab per thing that runs: Claude Code, Codex,
 OpenCode, pi — account-scoped providers are services, never agents), each
 switching independently. The subscription card's header carries the
-selected service's mark; the Z.ai tab shows Z.ai's own mark (traced from
+selected service's mark, and the agent card's usage title leads with the
+selected agent's mark (`ProviderMark`, shared); the Z.ai tab shows Z.ai's
+own mark (traced from
 the official logo) even though its data rides the opencode record until
 Z.ai gets its own. Account-scoped services (OpenRouter, Fireworks) carry
 their day/model charts inside the service card under `USAGE — ACCOUNT` —
