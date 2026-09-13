@@ -1,0 +1,13 @@
+[Unit]
+Description=Z.ai GLM Coding Plan quota collector for the Agents Monitor panel
+# Keeps ~/.local/state/omarchy/agents/usage/zai.json fresh between panel
+# refreshes (default 900 s) and while the shell is down — same reasoning
+# as the pi timer, but load-bearing here: the panel's own --limits-only
+# refreshes skip every bundled probe (see agents-monitor-update), so
+# without this timer the undocumented z.ai endpoint would only get hit on
+# a full refresh. Runs the collector from the installed plugin; install.sh
+# deploys this unit and uninstall.sh removes it.
+
+[Service]
+Type=oneshot
+ExecStart=%h/.config/omarchy/plugins/ptr.agents-monitor/bin/omarchy-agent-usage-zai --write

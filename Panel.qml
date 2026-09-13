@@ -23,14 +23,18 @@ Panel {
   // The panel reads the same records along two independent axes: what you
   // pay for (services — balance and limit windows) and what ran (agents —
   // session stats). A provider earns a tab in a card by having that kind
-  // of data: claude/codex/opencode sit in both strips, pi only among
-  // agents, and the two cards switch independently.
+  // of data: claude/codex sit in both strips, zai service-only (it has no
+  // local stats), pi and opencode agent-only, and the two cards switch
+  // independently. A limits-only record with a dead probe and no rows yet
+  // still earns the service tab via the urgent status+help pairing — that
+  // pairing exists to be shown, not to be gated out.
   readonly property var serviceProviders: {
     var rev = providers
     var result = []
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i]
-      if ((p.limits && p.limits.length > 0) || p.balance)
+      if ((p.limits && p.limits.length > 0) || p.balance
+          || (String(p.usageStatusText || "") !== "" && String(p.authHelpText || "") !== ""))
         result.push(p)
     }
     return result
@@ -124,7 +128,7 @@ Panel {
   // tool that ran. Same record, two honest labels.
   function serviceName(p) {
     if (!p) return ""
-    var map = { claude: "Anthropic", codex: "OpenAI", opencode: "Z.ai" }
+    var map = { claude: "Anthropic", codex: "OpenAI" }
     return map[String(p.providerId)] || p.providerName
   }
   function agentName(p) {
@@ -364,7 +368,8 @@ Panel {
     var map = {
       claude: "Anthropic",
       codex: "OpenAI",
-      opencode: "Z.ai",
+      opencode: "OpenCode",
+      zai: "Z.ai",
       openrouter: "OpenRouter",
       fireworks: "Fireworks",
       "opencode-zen": "OpenCode Zen"
@@ -445,11 +450,11 @@ Panel {
     return p ? markCandidates(String(p.providerId), surfaceColor) : []
   }
 
-  // The Z.ai tab's data rides the opencode record until z.ai gets its
-  // own, but its mark is Z.ai's, not OpenCode's.
+  // Marks resolve by provider id directly now that Z.ai has its own
+  // record (assets/zai.svg); the opencode AGENT mark stays
+  // assets/opencode.svg (see markCandidates).
   function serviceMarkId(p) {
-    var id = String(p ? p.providerId : "")
-    return id === "opencode" ? "zai" : id
+    return String(p ? p.providerId : "")
   }
 
   // Nothing to report, nothing in the bar: Bar.qml collapses a slot whose item

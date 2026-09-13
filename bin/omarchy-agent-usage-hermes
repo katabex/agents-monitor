@@ -65,8 +65,8 @@ DB_PATH = Path.home() / ".hermes" / "state.db"
 PROVIDER_TO_SERVICE = {
     "openai-codex": "codex",
     "anthropic": "claude",
-    "zai": "opencode",
-    "zai-coding-plan": "opencode",
+    "zai": "zai",
+    "zai-coding-plan": "zai",
     "opencode": "opencode-zen",
     "openrouter": "openrouter",
     "fireworks": "fireworks",

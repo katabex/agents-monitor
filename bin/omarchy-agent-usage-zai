@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""Z.ai GLM Coding Plan quota collector for the Agents Monitor panel.
+
+Prints (or, with --write, atomically writes) the record contract that
+~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
+bundled pi/opencode/openrouter/hermes collectors emit.
+
+Split out of omarchy-agent-usage-opencode (2026-09-13): that collector's
+probe of the undocumented-but-community-standard
+
+  https://api.z.ai/api/monitor/usage/quota/limit
+
+moved here unchanged, key resolution included, so the Z.ai tab stops
+wearing OpenCode's identity — its own id, name, and mark, on its own
+record — instead of riding OpenCode's local-stats record as an override.
+The GLM Coding Plan key still comes from OpenCode's auth.json
+(zai-coding-plan first, then zai) or $ZAI_API_KEY; that file remains the
+only place the key is issued to, coding-plan CLI or not.
+
+Limits-only record: hasLocalStats is always false and every stats bucket
+stays empty — this collector counts nothing, it only meters. The probe is
+fail-soft (10 s timeout, single attempt, last good payload cached in
+XDG_CACHE_HOME/omarchy/agent-usage/zai-quota.json and reused while its
+windows are still open) so a dead network degrades to the cache, not a
+blank tab. Quota is account-level, not gated behind any local store: even
+with no key at all the record is still written (`ready` stays true) with
+the failure pairing (usageStatusText + authHelpText) so the tab shows the
+remedy instead of vanishing. Unknown row types (V3 points-based plans may
+send CREDIT_LIMIT and friends) are skipped, never fatal. --quota-debug
+prints the raw payload to stderr.
+"""
+
+import json
+import os
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+ZAI_QUOTA_URL = "https://api.z.ai/api/monitor/usage/quota/limit"
+OPENCODE_AUTH_JSON = Path.home() / ".local" / "share" / "opencode" / "auth.json"
+QUOTA_CACHE = Path(
+    os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
+) / "omarchy" / "agent-usage" / "zai-quota.json"
+QUOTA_TIMEOUT = 10.0
+QUOTA_CACHE_MAX_AGE = 24 * 3600  # s; older caches describe a dead day
+
+# --quota-debug prints this; scan() stash for main().
+_LAST_RAW_PAYLOAD = {"payload": None, "source": ""}
+
+
+def zai_api_key():
+    """Coding-plan key: OpenCode's auth.json (zai-coding-plan first, then
+    zai), else the environment. Empty string when nothing resolves."""
+    if OPENCODE_AUTH_JSON.is_file():
+        try:
+            auth = json.loads(OPENCODE_AUTH_JSON.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            auth = {}
+        for provider in ("zai-coding-plan", "zai"):
+            entry = auth.get(provider) or {}
+            for field in ("key", "access_token"):
+                value = entry.get(field)
+                if value:
+                    return str(value)
+    return os.environ.get("ZAI_API_KEY") or ""
+
+
+def fraction(percent):
+    """z.ai percentage (0-100) as the 0-1 fraction the panel meters want;
+    None when the payload did not carry a usable number."""
+    try:
+        n = float(percent)
+    except (TypeError, ValueError):
+        return None
+    if not (n >= 0):
+        return None
+    return min(1.0, n / 100.0)
+
+
+def iso_reset(epoch_ms):
+    """nextResetTime epoch-ms as ISO-8601 UTC; "" when unparseable."""
+    try:
+        return datetime.fromtimestamp(float(epoch_ms) / 1000, tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
+        return ""
+
+
+# Window labels for the row types the endpoint has actually been observed
+# to send. `unit` is a time-unit enum: 3 = hour, 6 = week, 5 = the
+# search/zread tool quota (community docs call it monthly; the live reset
+# has been seen landing much sooner — the countdown carries the truth, so
+# the label asserts no period).
+ZAI_ROW_LABELS = {
+    ("TOKENS_LIMIT", 3): "Session (5-hour)",
+    ("TOKENS_LIMIT", 6): "Weekly tokens",
+    ("TIME_LIMIT", 5): "Tool requests",
+}
+
+
+def zai_limit_rows(payload):
+    """(limit rows, level) mapped from a quota payload. Pure: no clock, no
+    network. Unknown row types are skipped — V3 points-based plans may send
+    CREDIT_LIMIT and other new shapes. Beware: `usage` is the cap,
+    `currentValue` the consumption; only `percentage` is mapped."""
+    data = payload.get("data") or {}
+    rows = []
+    for entry in data.get("limits") or []:
+        label = ZAI_ROW_LABELS.get((entry.get("type"), entry.get("unit")))
+        percent = fraction(entry.get("percentage"))
+        if label is None or percent is None:
+            continue
+        rows.append({
+            "label": label,
+            "title": label,
+            "percent": percent,
+            "resetsAt": iso_reset(entry.get("nextResetTime")),
+        })
+    return rows, str(data.get("level") or "")
+
+
+def window_open(resets_at, now):
+    """Stock claude rule: a cached percentage outlives its probe only until
+    its window rolls over — after that it describes a dead period. A row
+    with no readable reset time is kept; a timestamp is no reason to throw
+    away a real number."""
+    if not resets_at:
+        return True
+    try:
+        return datetime.fromisoformat(resets_at) > now
+    except ValueError:
+        return True
+
+
+def short_quota_text(rows):
+    """One status line, e.g. `5h 25% · wk 4% · tools 1% · resets 11:50`,
+    reset time local like every other countdown the panel shows."""
+    short = {"Session (5-hour)": "5h", "Weekly tokens": "wk", "Tool requests": "tools"}
+    parts = []
+    for row in rows:
+        part = short.get(row["label"])
+        if part:
+            parts.append(f"{part} {int(round(row['percent'] * 100))}%")
+    for row in rows:
+        if row.get("resetsAt"):
+            try:
+                local = datetime.fromisoformat(row["resetsAt"]).astimezone()
+                parts.append("resets " + local.strftime("%H:%M"))
+            except ValueError:
+                pass
+            break
+    return " · ".join(parts)
+
+
+def fetch_zai_payload(key):
+    request = urllib.request.Request(
+        ZAI_QUOTA_URL,
+        headers={"Authorization": "Bearer " + key, "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=QUOTA_TIMEOUT) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if payload.get("code") != 200 or not isinstance(payload.get("data"), dict):
+        raise ValueError("unexpected quota envelope")
+    return payload
+
+
+def read_cached_payload(now):
+    try:
+        cached = json.loads(QUOTA_CACHE.read_text(encoding="utf-8"))
+        fetched = datetime.fromisoformat(cached.get("fetchedAt"))
+        if (now - fetched).total_seconds() <= QUOTA_CACHE_MAX_AGE:
+            payload = cached.get("payload")
+            if isinstance(payload, dict):
+                return payload
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def write_cached_payload(payload, now):
+    try:
+        QUOTA_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        QUOTA_CACHE.write_text(
+            json.dumps({"fetchedAt": now.isoformat(), "payload": payload}),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # cache is an optimization, never a requirement
+
+
+def zai_quota(now):
+    """(rows, level, status_text, help_text) for the record; never raises.
+    Failures surface in authHelpText (the panel's urgent red box shows that,
+    and the hero falls back to the tier label) — usageStatusText stays the
+    informational line."""
+    key = zai_api_key()
+    payload = None
+    source = ""
+    if key:
+        try:
+            payload = fetch_zai_payload(key)
+            source = "probe"
+        except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+            payload = None
+        if payload is not None:
+            write_cached_payload(payload, now)
+    if payload is None and key:
+        payload = read_cached_payload(now)
+        if payload is not None:
+            source = "cache"
+    _LAST_RAW_PAYLOAD["payload"] = payload
+    _LAST_RAW_PAYLOAD["source"] = source
+
+    if payload is None:
+        hint = "z.ai quota unavailable (probe failed, no fresh cache)" if key \
+            else "z.ai quota needs a key: auth.json or $ZAI_API_KEY"
+        return [], "", "z.ai quota unavailable", hint
+    rows, level = zai_limit_rows(payload)
+    rows = [row for row in rows if window_open(row["resetsAt"], now)]
+    text = short_quota_text(rows)
+    return rows, level, text, ""
+
+
+def scan():
+    now = datetime.now(timezone.utc)
+    rows, level, text, help_text = zai_quota(now)
+    return {
+        "schemaVersion": 1,
+        "id": "zai",
+        "name": "Z.ai",
+        "updatedAt": now.isoformat(),
+        "ready": True,
+        "hasLocalStats": False,
+        "tierLabel": ("GLM " + level.capitalize()) if level else "",
+        "limits": rows,
+        "usageStatusText": text,
+        "authHelpText": help_text,
+        "todayPrompts": 0,
+        "todaySessions": 0,
+        "todayTotalTokens": 0,
+        "todayTokensByModel": {},
+        "recentDays": [],
+        "totalPrompts": 0,
+        "totalSessions": 0,
+        "activeDays": 0,
+        "activeDates": [],
+        "modelUsage": {},
+        "subscriptionUsage": {},
+        "todaySubscriptionUsage": {},
+    }
+
+
+def write_record(record):
+    USAGE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".zai.", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, str(USAGE_DIR / "zai.json"))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    record = scan()
+    if "--quota-debug" in sys.argv[1:]:
+        source = _LAST_RAW_PAYLOAD["source"] or "none"
+        payload = _LAST_RAW_PAYLOAD["payload"]
+        sys.stderr.write(f"z.ai quota payload (source: {source}):\n")
+        if payload is None:
+            sys.stderr.write("  (unavailable — probe failed and no fresh cache)\n")
+        else:
+            json.dump(payload, sys.stderr, indent=2)
+            sys.stderr.write("\n")
+    if "--write" in sys.argv[1:]:
+        write_record(record)
+        print(f"wrote {USAGE_DIR / 'zai.json'}")
+    else:
+        json.dump(record, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+
+
+if __name__ == "__main__":
+    main()

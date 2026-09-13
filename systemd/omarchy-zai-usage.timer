@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh OpenCode agent usage record every 5 minutes
+Description=Refresh Z.ai quota record every 5 minutes
 
 [Timer]
 OnBootSec=1min
