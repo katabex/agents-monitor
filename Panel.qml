@@ -50,11 +50,10 @@ Panel {
         var usageModels = p.modelUsage || {}
         for (var k in usageModels) { has = true; break }
       }
-      // Discovery MVP records (usage detected, parser pending) carry no
-      // tokens at all — day activity is their whole truth, and it is
-      // enough to have run here.
-      if (!has && Number(p.activeDays || 0) > 0)
-        has = true
+      // A tab is earned by renderable token data (day chart or model
+      // rows), not by bare activity: activity-only records — discovery
+      // MVPs, copilot's token-less store — stay in the usage dir but out
+      // of the strip until they carry numbers worth charting.
       if (has) result.push(p)
     }
     return result
