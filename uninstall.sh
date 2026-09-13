@@ -10,7 +10,14 @@ DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
 omarchy plugin disable ptr.agents-monitor 2>/dev/null || true
 omarchy plugin enable omarchy.agents --after omarchy.tailscale
 
-# OpenCode usage timer: off with the plugin (its collector lives in it).
+# Z.ai usage timer: off with the plugin (its collector lives in it).
+systemctl --user disable --now omarchy-zai-usage.timer 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/omarchy-zai-usage.service" \
+      "$HOME/.config/systemd/user/omarchy-zai-usage.timer"
+
+# Legacy cleanup for installs ≤ v0.4.3: the timer shipped as
+# omarchy-opencode-usage before the z.ai quota probe moved to its own
+# collector and record (v0.5.0).
 systemctl --user disable --now omarchy-opencode-usage.timer 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/omarchy-opencode-usage.service" \
       "$HOME/.config/systemd/user/omarchy-opencode-usage.timer"

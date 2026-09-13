@@ -2,7 +2,7 @@
 # Install Agents Monitor: copy into ~/.config/omarchy/plugins and replace the
 # stock omarchy.agents widget on the bar.
 #
-#   ./install.sh    # copy + validate + opencode timer + shell restart
+#   ./install.sh    # copy + validate + zai timer + shell restart
 #                   # (re-run any time to deploy repo changes)
 #
 # Symlinks are rejected by omarchy-plugin-validate, so the install is a copy;
@@ -16,8 +16,9 @@
 # The machine-local omarchy-pi-usage.timer stays enabled on purpose
 # (option 2): the plugin refreshes all providers itself, and the timer
 # keeps pi.json fresh between panel refreshes and when the shell is not
-# running. The opencode sibling below ships from this repo for the same
-# job on opencode.json.
+# running. The zai sibling below ships from this repo for the same job on
+# zai.json — load-bearing there since the panel's own --limits-only
+# refreshes skip every bundled probe.
 
 set -euo pipefail
 
@@ -38,14 +39,20 @@ omarchy plugin validate "$DEST"
 omarchy plugin disable omarchy.agents
 omarchy plugin enable ptr.agents-monitor --after omarchy.tailscale
 
-# OpenCode usage: 5-minute local scan between panel refreshes and while
+# Upgrade cleanup ≤ v0.4.3: the quota timer shipped as
+# omarchy-opencode-usage before the probe moved to its own zai collector.
+systemctl --user disable --now omarchy-opencode-usage.timer 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/omarchy-opencode-usage.service" \
+      "$HOME/.config/systemd/user/omarchy-opencode-usage.timer"
+
+# Z.ai quota: 5-minute network probe between panel refreshes and while
 # the shell is down (same cadence as the pi timer).
 mkdir -p "$HOME/.config/systemd/user"
-cp "$SRC/systemd/omarchy-opencode-usage.service" \
-   "$SRC/systemd/omarchy-opencode-usage.timer" \
+cp "$SRC/systemd/omarchy-zai-usage.service" \
+   "$SRC/systemd/omarchy-zai-usage.timer" \
    "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
-systemctl --user enable --now omarchy-opencode-usage.timer
+systemctl --user enable --now omarchy-zai-usage.timer
 
 # QML changes need a shell restart: the hot-reload path serves cached
 # components (see header comment).

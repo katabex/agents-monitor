@@ -222,11 +222,14 @@ Item {
 
   // All-time keeps a quiet day from hiding an agent; today's counts admit a
   // machine whose only source is history.jsonl, which knows nothing older.
+  // A limits-only record (zai) with a dead probe and no local stats at all
+  // still deserves its tab when it sets the urgent status+help pairing —
+  // that is the remedy the tab exists to show, not something to hide.
   function providerHasData(p) {
     return numberValue(p.totalPrompts) > 0 || numberValue(p.totalSessions) > 0
       || numberValue(p.activeDays) > 0 || numberValue(p.todayPrompts) > 0
       || numberValue(p.todaySessions) > 0 || (p.limits && p.limits.length > 0)
-      || !!p.balance
+      || !!p.balance || (!!p.usageStatusText && !!p.authHelpText)
   }
 
   // A prepaid agent's credit ledger. Like rate limits, the balance is

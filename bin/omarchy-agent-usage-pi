@@ -45,12 +45,10 @@ CLAIMED_API_PREFIXES = ("openai-codex",)
 
 # pi provider ids → the service tab whose credits those tokens burn
 # (attribution is billing-accurate: an OpenRouter-routed call burns
-# OpenRouter credits whatever the model behind it). "zai" maps to the
-# opencode record only because the GLM plan's quota rides it until z.ai
-# gets its own record. Unmapped ids pass through; the panel labels them
-# as-is.
+# OpenRouter credits whatever the model behind it). Unmapped ids pass
+# through; the panel labels them as-is.
 PROVIDER_TO_SERVICE = {
-    "zai": "opencode",
+    "zai": "zai",
     "openrouter": "openrouter",
     "fireworks": "fireworks",
     "anthropic": "claude",

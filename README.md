@@ -1,12 +1,12 @@
 # Agents Monitor
 
 An [Omarchy](https://omarchy.org) shell plugin: **Claude Code, Codex,
-Fireworks, pi, OpenCode, and OpenRouter** usage, limits, and pace in one
-bar panel.
+Fireworks, pi, OpenCode, Z.ai, and OpenRouter** usage, limits, and pace in
+one bar panel.
 
 Fork of the stock `omarchy.agents` widget (MIT) with built-in **pi agent**,
-**OpenCode**, and **OpenRouter** collection — providers the stock panel does
-not show. When installed it replaces the stock widget on the bar.
+**OpenCode**, **Z.ai**, and **OpenRouter** collection — providers the stock
+panel does not show. When installed it replaces the stock widget on the bar.
 
 ![Agents Monitor panel](screenshots/panel.png)
 
@@ -22,7 +22,8 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | codex | Codex app-server RPC | as stock |
 | fireworks | prepaid balance estimate | as stock |
 | **pi** | — (local stats only) | `~/.pi/agent/sessions` + `~/.omp/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
-| **opencode** | z.ai GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
+| **opencode** | — (local stats only) | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
+| **zai** | GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | — (account-level quota, no local store of its own) |
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it) |
 | **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) lands on the OpenAI service tab in PER SUBSCRIPTION |
 | **copilot** | — (activity only: copilot 1.0.83 persists no token counts — `session-store.db`'s `assistant_usage_events` is empty, upgrade path documented in the collector) | `~/.copilot/session-store.db` (SQLite, read-only) — prompts are turns with a user message, sessions are sessions that ran a turn, day buckets from turn timestamps; no token claims, so charts stay hidden rather than lie |
@@ -38,10 +39,12 @@ OpenCode, pi, Hermes — account-scoped providers are services, never
 agents), each
 switching independently. The subscription card's header carries the
 selected service's mark, and the agent card's usage title leads with the
-selected agent's mark (`ProviderMark`, shared); the Z.ai tab shows Z.ai's
-own mark (traced from
-the official logo) even though its data rides the opencode record until
-Z.ai gets its own. Account-scoped services (OpenRouter, Fireworks) carry
+selected agent's mark (`ProviderMark`, shared); the Z.ai tab is its own
+record (`bin/omarchy-agent-usage-zai`), limits-only, so it carries Z.ai's
+own mark (traced from the official logo) and shows up service-only even
+with no local OpenCode activity at all — a dead probe and no key still
+write the record, with the remedy in its urgent status box, so the tab
+never silently vanishes. Account-scoped services (OpenRouter, Fireworks) carry
 their day/model charts inside the service card under `USAGE — ACCOUNT` —
 their tokens are credit burn, subscription data. Tab strips use a local
 `StatusTabButton` (stock `Button` geometry and Style-token chrome, minus
@@ -93,9 +96,10 @@ SUBSCRIPTION section under TOKENS BY MODEL:
 - **pi** — buckets each counted message by its session provider
   (`zai` → Z.ai, `openrouter` → OpenRouter; unmapped ids pass through)
 - **OpenCode** — buckets each db message by `providerID`
-  (`zai`/`zai-coding-plan` → Z.ai via the opencode record until z.ai gets
-  its own; the built-in `opencode` provider is the separate Zen
-  subscription, labeled "OpenCode Zen")
+  (`zai`/`zai-coding-plan` → Z.ai's own record/tab; the built-in
+  `opencode` provider is the separate Zen subscription, labeled
+  "OpenCode Zen")
+- **Hermes** — same `zai`/`zai-coding-plan` → Z.ai mapping as OpenCode
 - **Claude Code / Codex** — synthesized from the record's own totals
   (they burn exactly one subscription by definition; note a model routed
   through a compat gateway still counts as its gateway's subscription,
@@ -118,11 +122,17 @@ session-static, and counts only this machine.
   `usage/opencode.json`. Token mapping: input ← `tokens.input`, output ←
   `tokens.output` + `tokens.reasoning`, cache read/write ←
   `tokens.cache.{read,write}` — the sum equals OpenCode's `tokens.total`.
-  Also probes the z.ai GLM Coding Plan quota endpoint (OpenCode here runs
-  on that plan) and maps the windows onto the tab's limit meters;
-  fail-soft (10 s timeout, single attempt, cached payload reused while its
-  windows are open), unknown row types skipped, `--quota-debug` prints the
-  raw payload
+  Local stats only, no quota probe (see `omarchy-agent-usage-zai`)
+- `bin/omarchy-agent-usage-zai` — Python collector; probes the z.ai GLM
+  Coding Plan quota endpoint (undocumented community endpoint
+  `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json` or
+  `$ZAI_API_KEY`) and maps the windows onto a limits-only record,
+  `usage/zai.json` — no local store, no stats buckets. Fail-soft (10 s
+  timeout, single attempt, cached payload reused while its windows are
+  open), unknown row types skipped, `--quota-debug` prints the raw
+  payload. Quota is account-level, not gated behind a key: even with none
+  configured the record still writes, with the remedy in
+  `authHelpText` so the tab shows why instead of disappearing
 - `bin/omarchy-agent-usage-openrouter` — Python collector; balance meter
   from OpenRouter's official credits/auth-key endpoints, plus token stats
   (today / by day / by model) from the Analytics API. Keys: balance needs
@@ -141,11 +151,13 @@ session-static, and counts only this machine.
   and agent-id filters) and runs all three bundled collectors under the
   same rules, so all enabled providers refresh together. `--limits-only`
   runs never touch the network-bound bundled probes, so opening the panel
-  never hits the undocumented z.ai endpoint (the 5-minute opencode timer
-  below keeps quota fresh instead).
-- `Main.qml` differs from upstream in three lines: the resolved path of
-  the bundled runner, the command that uses it, and the `scope`
-  passthrough in `displayProvider`
+  never hits the undocumented z.ai endpoint (the 5-minute zai timer below
+  keeps quota fresh instead).
+- `Main.qml` differs from upstream in four spots: the resolved path of
+  the bundled runner, the command that uses it, the `scope` passthrough
+  in `displayProvider`, and `providerHasData` admitting the urgent
+  status+help pairing (so a limits-only record like zai's still earns a
+  tab on a dead, keyless probe with zero local stats to fall back on)
 
 ### The timer (option 2)
 
@@ -158,12 +170,18 @@ the plugin is uninstalled. The overlap is idempotent (atomic writes, same
 record shape).
 
 `install.sh` also ships and enables the sibling
-`omarchy-opencode-usage.timer` (same 1-min boot / 5-min active cadence,
-30 s accuracy) so `opencode.json` stays equally fresh. It runs the
-collector straight from the installed plugin directory — no second copy to
-keep in sync — and `uninstall.sh` stops and removes it, unlike the pi
-timer, which survives uninstall by design (so the pi tab keeps feeding the
-stock widget).
+`omarchy-zai-usage.timer` (same 1-min boot / 5-min active cadence,
+30 s accuracy) so `zai.json`'s quota stays fresh independent of the
+panel's own `--limits-only` refreshes. It runs the collector straight from
+the installed plugin directory — no second copy to keep in sync — and
+`uninstall.sh` stops and removes it, unlike the pi timer, which survives
+uninstall by design (so the pi tab keeps feeding the stock widget).
+
+Upgrading from ≤ v0.4.3: the quota timer used to ship as
+`omarchy-opencode-usage.timer`, running the opencode collector's
+now-removed quota probe. `install.sh` disables and removes that unit
+before installing the `zai` one; `uninstall.sh` does the same cleanup on
+its own.
 
 The whole live-agents view (cards, bar badge, quick probe) was removed on
 2026-09-07; nothing in the plugin reads or writes
@@ -195,13 +213,15 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 ```
 
 Copy upstream changes in, then re-apply the `Main.qml` patch (the
-runner: `updateBin` property + `updateCommand` first element; plus the
-`scope` passthrough in `displayProvider`) and the
+runner: `updateBin` property + `updateCommand` first element; the `scope`
+passthrough in `displayProvider`; and `providerHasData` admitting the
+urgent status+help pairing) and the
 `Panel.qml` patches (the content-fitted provider tab strip: `Flow` instead
 of equal-cell `Row`, buttons at natural width, `contentWidth` grown by
-`naturalRowWidth`; the status box's `authHelpText` visibility gate; and
-the usage group boundary with its `usageGroupTitle` header) — everything
-else the fork adds lives in
+`naturalRowWidth`; the status box's `authHelpText` visibility gate; the
+usage group boundary with its `usageGroupTitle` header; and
+`serviceProviders` admitting that same urgent status+help pairing) —
+everything else the fork adds lives in
 files upstream does not have (the `bin/` tree), which cannot conflict. The
 manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,
