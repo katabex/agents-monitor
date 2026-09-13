@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Hermes agent usage collector for the Agents Monitor panel.
+
+Prints (or, with --write, atomically writes) the record contract that
+~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
+bundled pi/opencode/openrouter collectors emit.
+
+Source of truth is Hermes' SQLite store, ~/.hermes/state.db (read-only
+access, same discipline as the opencode collector: mode=ro never takes a
+write lock, so a running gateway is never blocked and the db is never
+created by accident). Hermes keeps per-session token aggregates and a
+session_model_usage table that breaks each session down by model and
+billing provider — that table is the backbone here:
+
+  day buckets    session_model_usage rows, attributed to the session's
+                 local start date (messages.token_count is NULL in this
+                 build, so per-message bucketing is not available; a
+                 session spanning midnight books everything to its start
+                 date, which for conversation-scoped hermes sessions is
+                 honest)
+  modelUsage     session_model_usage grouped by model
+  subscriptionUsage  grouped by billing_provider, mapped to service-tab
+                 ids — hermes billing through the Codex subscription
+                 (billing_provider "openai-codex", mode
+                 "subscription_included") lands on the OpenAI service
+                 tab, exactly like pi's session-provider bucketing
+
+All three buckets therefore sum to the same total (verified against the
+sessions table's own aggregates). Token mapping into the Claude-shaped
+buckets the panel expects: output ← output_tokens + reasoning_tokens
+(OpenCode convention; Claude's output_tokens includes thinking),
+cacheRead ← cache_read_tokens, cacheWrite ← cache_write_tokens. Internal
+chores (title_generation rows, empty billing_provider) inherit the
+session's billing provider so they attribute somewhere real.
+
+No double-count coupling: the stock Codex collector scans ~/.codex and
+never touches ~/.hermes — hermes sessions labelled "openai-codex" are
+billed there but recorded here only. The OpenAI service tab's limits are
+the account's own truth and already include hermes burn; that is the
+service axis doing its job, same as the GLM-compat wrinkle.
+
+No quota probe: hermes has no limits endpoint of its own (it burns other
+subscriptions), so this record carries local stats only, like pi.
+"""
+
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+DB_PATH = Path.home() / ".hermes" / "state.db"
+
+# billing_provider → the service tab whose credits those tokens burn.
+# Mirrors the opencode collector's mapping plus hermes' own spelling of
+# the Codex subscription. Unmapped ids pass through; the panel labels
+# them as-is.
+PROVIDER_TO_SERVICE = {
+    "openai-codex": "codex",
+    "anthropic": "claude",
+    "zai": "opencode",
+    "zai-coding-plan": "opencode",
+    "opencode": "opencode-zen",
+    "openrouter": "openrouter",
+    "fireworks": "fireworks",
+}
+
+USAGE_SQL = """
+select s.id, s.started_at, s.billing_provider,
+       m.model, m.billing_provider, m.task,
+       m.input_tokens, m.output_tokens, m.reasoning_tokens,
+       m.cache_read_tokens, m.cache_write_tokens
+from session_model_usage m join sessions s on s.id = m.session_id
+"""
+
+PROMPTS_SQL = """
+select count(*), sum(date(timestamp, 'unixepoch', 'localtime') = date('now', 'localtime'))
+from messages
+where role = 'user' and active = 1 and _compressed_summary = 0
+"""
+
+
+def local_day(epoch_seconds):
+    """Local calendar date for epoch seconds; None when unparseable."""
+    try:
+        return datetime.fromtimestamp(float(epoch_seconds)).strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def number(value):
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return int(n) if n > 0 else 0
+
+
+def empty_bucket():
+    return {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 0,
+    }
+
+
+def add_tokens(bucket, input_t, output_t, read_t, write_t):
+    bucket["inputTokens"] += input_t
+    bucket["outputTokens"] += output_t
+    bucket["cacheReadInputTokens"] += read_t
+    bucket["cacheCreationInputTokens"] += write_t
+
+
+def service_for(provider_id):
+    return PROVIDER_TO_SERVICE.get(provider_id, provider_id or "unknown")
+
+
+def scan():
+    today = datetime.now().strftime("%Y-%m-%d")
+    recent_dates = []
+    for offset in range(6, -1, -1):
+        recent_dates.append(
+            datetime.fromordinal(datetime.now().toordinal() - offset).strftime("%Y-%m-%d")
+        )
+    recent = {d: {"date": d, "messageCount": 0} for d in recent_dates}
+
+    active_days = set()
+    usage_by_model = {}
+    usage_by_subscription = {}
+    today_by_model = {}
+    today_by_subscription = {}
+    today_sessions = set()
+    today_total = 0
+
+    # mode=ro: never blocks a running gateway, never creates the db.
+    connection = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    try:
+        rows = connection.execute(USAGE_SQL)
+        for (session_id, started_at, session_provider,
+             model, row_provider, _task,
+             input_raw, output_raw, reasoning_raw,
+             read_raw, write_raw) in rows:
+            input_t = number(input_raw)
+            output_t = number(output_raw) + number(reasoning_raw)
+            read_t = number(read_raw)
+            write_t = number(write_raw)
+            total = input_t + output_t + read_t + write_t
+            if not total:
+                continue
+
+            day = local_day(started_at) or today
+            model = str(model or "") or "unknown"
+            # Chores (title generation &c.) bill to the session's provider.
+            provider = str(row_provider or session_provider or "")
+
+            active_days.add(day)
+            add_tokens(usage_by_model.setdefault(model, empty_bucket()),
+                       input_t, output_t, read_t, write_t)
+            add_tokens(usage_by_subscription.setdefault(
+                           service_for(provider), empty_bucket()),
+                       input_t, output_t, read_t, write_t)
+            if day in recent:
+                recent[day]["messageCount"] += total
+            if day == today:
+                today_sessions.add(session_id)
+                today_total += total
+                today_by_model[model] = today_by_model.get(model, 0) + total
+                key = service_for(provider)
+                today_by_subscription[key] = today_by_subscription.get(key, 0) + total
+
+        # A session that never sent anything is a launch, not a usage.
+        total_sessions = number(connection.execute(
+            "select count(*) from sessions where message_count > 0").fetchone()[0])
+        prompt_row = connection.execute(PROMPTS_SQL).fetchone()
+        total_prompts = number(prompt_row[0])
+        today_prompts = number(prompt_row[1])
+    finally:
+        connection.close()
+
+    return {
+        "schemaVersion": 1,
+        "id": "hermes",
+        "name": "Hermes",
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "ready": True,
+        "hasLocalStats": total_prompts > 0 or total_sessions > 0,
+        "tierLabel": "local stats",
+        "limits": [],
+        "usageStatusText": "",
+        "authHelpText": "",
+        "hasPromptStats": True,
+        "todayPrompts": today_prompts,
+        "todaySessions": len(today_sessions),
+        "todayTotalTokens": today_total,
+        "todayTokensByModel": today_by_model,
+        "recentDays": [recent[d] for d in recent_dates],
+        "totalPrompts": total_prompts,
+        "totalSessions": total_sessions,
+        "activeDays": len(active_days),
+        "activeDates": sorted(active_days),
+        "modelUsage": usage_by_model,
+        "subscriptionUsage": usage_by_subscription,
+        "todaySubscriptionUsage": today_by_subscription,
+    }
+
+
+def write_record(record):
+    USAGE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".hermes.", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, str(USAGE_DIR / "hermes.json"))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    if not DB_PATH.is_file():
+        # Hermes never ran here: no store, no record, no tab. (A record
+        # that existed before the store vanished stays as-is, like stock.)
+        return 0
+    record = scan()
+    if "--write" in sys.argv[1:]:
+        write_record(record)
+        print(f"wrote {USAGE_DIR / 'hermes.json'}")
+    else:
+        json.dump(record, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

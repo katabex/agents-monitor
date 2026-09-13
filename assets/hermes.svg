@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Hermes mark: neutral wing glyph (hermes-agent ships no logo of its
+       own — three ascending chevrons, the messenger's wing); see also
+       hermes-light for light surfaces. -->
+  <path d="M5.87 21.05 L6.50 17.50 L2.95 18.13 M11.37 15.55 L12.00 12.00 L8.45 12.63 M16.87 10.05 L17.50 6.50 L13.95 7.13" fill="none" stroke="#ffffff" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

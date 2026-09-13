@@ -24,6 +24,7 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | **pi** | — (local stats only) | `~/.pi/agent/sessions` + `~/.omp/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
 | **opencode** | z.ai GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it) |
+| **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) lands on the OpenAI service tab in PER SUBSCRIPTION |
 
 Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The QML
@@ -31,7 +32,8 @@ divergences: the panel content is a two-card, two-strip design — a
 SUBSCRIPTION card (one tab per thing you pay for, named by company:
 Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks — balance + limit meters)
 and an AGENT card (one tab per thing that runs: Claude Code, Codex,
-OpenCode, pi — account-scoped providers are services, never agents), each
+OpenCode, pi, Hermes — account-scoped providers are services, never
+agents), each
 switching independently. The subscription card's header carries the
 selected service's mark, and the agent card's usage title leads with the
 selected agent's mark (`ProviderMark`, shared); the Z.ai tab shows Z.ai's
