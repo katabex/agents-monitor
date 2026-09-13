@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""GitHub Copilot CLI usage collector for the Agents Monitor panel.
+
+Prints (or, with --write, atomically writes) the record contract that
+~/.local/state/omarchy/agents/usage/ consumers expect.
+
+Store investigation (2026-09-13, copilot 1.0.83): ~/.copilot holds
+session-state/*/events.jsonl (rich events — models, turns, hooks — but no
+token counts; model metadata only), process logs (MCP noise), and the
+real prize, session-store.db (SQLite, read with mode=ro so a running
+Copilot is never blocked). Its schema is exactly what a token parser
+wants — assistant_usage_events(input_tokens, output_tokens,
+cache_read_tokens, cache_write_tokens, reasoning_tokens, model,
+created_at) — but the table is EMPTY in this version: the CLI does not
+persist usage yet. The upgrade is one SELECT away when a future version
+starts filling it:
+
+  select model, input_tokens, output_tokens, reasoning_tokens,
+         cache_read_tokens, cache_write_tokens, created_at
+  from assistant_usage_events
+
+Until then this is an activity record, the honest maximum the store
+allows: prompts are turns with a non-empty user_message, sessions are
+sessions that actually ran a turn, and day buckets come from turn
+timestamps (local dates; ISO-UTC text in the db). No token claims —
+recentDays and modelUsage stay empty, so the day chart and model rows
+stay hidden rather than lie. Copilot rides the GitHub Copilot
+subscription, which has no service tab here, so there is no attribution
+to map either.
+"""
+
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+DB_PATH = Path.home() / ".copilot" / "session-store.db"
+
+
+def local_day(iso_utc):
+    """Local calendar date for the db's ISO-8601 UTC text; None when
+    unparseable (torn row mid-upgrade; WAL keeps committed rows whole)."""
+    try:
+        return datetime.fromisoformat(
+            str(iso_utc).replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def scan():
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    active_days = set()
+    sessions = set()
+    today_sessions = set()
+    total_prompts = 0
+    today_prompts = 0
+
+    connection = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    try:
+        rows = connection.execute(
+            "select session_id, timestamp from turns"
+            " where user_message is not null and user_message != ''"
+        )
+        for session_id, timestamp in rows:
+            day = local_day(timestamp)
+            if day is None:
+                continue
+            total_prompts += 1
+            active_days.add(day)
+            sessions.add(session_id)
+            if day == today:
+                today_prompts += 1
+                today_sessions.add(session_id)
+    finally:
+        connection.close()
+
+    return {
+        "schemaVersion": 1,
+        "id": "copilot",
+        "name": "Copilot",
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "ready": True,
+        "hasLocalStats": total_prompts > 0,
+        "tierLabel": "local stats",
+        "limits": [],
+        "usageStatusText": "usage detected — copilot persists no token counts yet",
+        "authHelpText": "",
+        "hasPromptStats": True,
+        "todayPrompts": today_prompts,
+        "todaySessions": len(today_sessions),
+        "todayTotalTokens": 0,
+        "todayTokensByModel": {},
+        "recentDays": [],
+        "totalPrompts": total_prompts,
+        "totalSessions": len(sessions),
+        "activeDays": len(active_days),
+        "activeDates": sorted(active_days),
+        "modelUsage": {},
+        "subscriptionUsage": {},
+        "todaySubscriptionUsage": {},
+    }
+
+
+def write_record(record):
+    USAGE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".copilot.", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, str(USAGE_DIR / "copilot.json"))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    if not DB_PATH.is_file():
+        # Copilot never ran here: no store, no record, no tab. (A record
+        # that existed before the store vanished stays as-is, like stock.)
+        return 0
+    record = scan()
+    if "--write" in sys.argv[1:]:
+        write_record(record)
+        print(f"wrote {USAGE_DIR / 'copilot.json'}")
+    else:
+        json.dump(record, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
