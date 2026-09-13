@@ -399,6 +399,35 @@ Panel {
     return rows.slice(0, 4)
   }
 
+  // Which tools burned this service's credits, heaviest first — the
+  // inverse of subscriptionRows: one subscription, many apps. Buckets
+  // carry modelUsage's shape (plus an ignored "spend" field) so rows and
+  // tooltips render identically; the app name is whatever the collector's
+  // own detection returned, unmapped.
+  function appRows(p) {
+    var usageByApp = p ? (p.appUsage || {}) : {}
+    var rows = []
+    for (var id in usageByApp) {
+      var bucket = usageByApp[id] || {}
+      var input = Number(bucket.inputTokens || 0)
+      var output = Number(bucket.outputTokens || 0)
+      var cacheRead = Number(bucket.cacheReadInputTokens || 0)
+      var cacheWrite = Number(bucket.cacheCreationInputTokens || 0)
+      var total = input + output + cacheRead + cacheWrite
+      if (total > 0)
+        rows.push({
+          name: String(id),
+          total: total,
+          input: input,
+          output: output,
+          cacheRead: cacheRead,
+          cacheWrite: cacheWrite
+        })
+    }
+    rows.sort(function(a, b) { return b.total - a.total })
+    return rows
+  }
+
   function modelTooltip(row) {
     if (!row) return ""
     return "In " + usage.formatTokenCount(row.input)
@@ -809,6 +838,38 @@ Panel {
                 visible: String(root.service ? root.service.scope : "") === "account"
                 p: root.service
                 sectionTitle: root.usageGroupTitle(root.service)
+              }
+
+              // ---------- Credit burn by app ----------
+              // The inverse of the agent card's PER SUBSCRIPTION: one
+              // subscription (OpenRouter today), many tools burning it.
+              // Earned by data like every other section here — only a
+              // record that actually carries appUsage grows this column.
+              Column {
+                id: appBurnSection
+                visible: appRows.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var appRows: root.appRows(root.service)
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "CREDIT BURN BY APP"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: appBurnSection.appRows
+
+                  ModelRow {
+                    required property var modelData
+                    width: appBurnSection.width
+                    row: modelData
+                    share: modelData.total / Math.max(1, appBurnSection.appRows[0].total)
+                  }
+                }
               }
 
             }

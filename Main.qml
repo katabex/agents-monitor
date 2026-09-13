@@ -276,6 +276,10 @@ Item {
       totalSessions: synced ? numberValue(stats.totalSessions) : numberValue(record.totalSessions),
       activeDays: synced ? numberValue(stats.activeDays) : numberValue(record.activeDays),
       modelUsage: synced ? (stats.modelUsage || ({})) : (record.modelUsage || ({})),
+      // Per-app credit burn (openrouter today): device-local only for
+      // now — the cross-device snapshot/aggregate pipeline below doesn't
+      // carry it, so a synced view falls back to empty rather than merge.
+      appUsage: synced ? (stats.appUsage || ({})) : (record.appUsage || ({})),
       subscriptionUsage: attributionFor(record),
       hasLocalStats: synced ? (stats.hasLocalStats !== false) : (record.hasLocalStats !== false),
       hasPromptStats: synced ? (stats.hasPromptStats !== false) : (record.hasPromptStats !== false),
