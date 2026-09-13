@@ -24,7 +24,7 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | **pi** | — (local stats only) | `~/.pi/agent/sessions` + `~/.omp/agent/sessions` transcripts, every provider **except** `anthropic` and `openai-codex` (those are already folded into the Claude/Codex tabs by the stock collectors; counting them here would double-count) |
 | **opencode** | — (local stats only) | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
 | **zai** | GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | — (account-level quota, no local store of its own) |
-| **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it) |
+| **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it), plus a CREDIT BURN BY APP breakdown on the service card (`app` dimension, same management key) |
 | **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) lands on the OpenAI service tab in PER SUBSCRIPTION |
 | **copilot** | — (activity only: copilot 1.0.83 persists no token counts — `session-store.db`'s `assistant_usage_events` is empty, upgrade path documented in the collector) | `~/.copilot/session-store.db` (SQLite, read-only) — prompts are turns with a user message, sessions are sessions that ran a turn, day buckets from turn timestamps; no token claims, so charts stay hidden rather than lie |
 | **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Tabs are earned by renderable token data — activity-only records stay maintained in the usage dir but out of the strip until a parser fills token buckets |
@@ -46,7 +46,12 @@ with no local OpenCode activity at all — a dead probe and no key still
 write the record, with the remedy in its urgent status box, so the tab
 never silently vanishes. Account-scoped services (OpenRouter, Fireworks) carry
 their day/model charts inside the service card under `USAGE — ACCOUNT` —
-their tokens are credit burn, subscription data. Tab strips use a local
+their tokens are credit burn, subscription data. A record that also
+carries `appUsage` (OpenRouter today) grows a further CREDIT BURN BY APP
+column below that, reusing the same `ModelRow` share-bar component as
+PER SUBSCRIPTION on the agent card — the inverse mirror: one subscription,
+many tools, instead of one tool, many subscriptions; empty or absent
+`appUsage` just leaves the column out. Tab strips use a local
 `StatusTabButton` (stock `Button` geometry and Style-token chrome, minus
 focus states, plus a text color that holds through selection — the kit's
 fixed `selected-color` token washes out a per-tab `foreground` override
@@ -105,10 +110,14 @@ SUBSCRIPTION section under TOKENS BY MODEL:
   through a compat gateway still counts as its gateway's subscription,
   e.g. GLM via z.ai's Anthropic-compat endpoint shows under Anthropic)
 
-OpenRouter/Fireworks tabs carry no attribution — their charts are
-account-wide analytics; the per-app split (analytics `app` dimension) is
-the planned mirror view. Attribution is billing-accurate but
-session-static, and counts only this machine.
+OpenRouter/Fireworks tabs carry no PER SUBSCRIPTION section themselves —
+their charts are already account-wide analytics, one subscription by
+definition. OpenRouter carries the mirror view instead, CREDIT BURN BY
+APP (see above): which tool spent the one subscription's credits, rather
+than which subscription a tool's tokens burned. Fireworks has no `app`
+analogue (no comparable dimension in its usage API) and stays
+totals-only. Attribution is billing-accurate but session-static, and
+(PER SUBSCRIPTION) counts only this machine.
 
 ## How bundled collection works
 
@@ -144,7 +153,18 @@ session-static, and counts only this machine.
   `{"managementKey": …}` or `$OPENROUTER_MANAGEMENT_KEY`. Without it the
   record degrades to balance-only. Stats are account-scoped (`scope:
   "account"`, the fireworks convention) so synced devices take the max, not
-  the sum. Unconfigured runs never clobber a previously collected record
+  the sum. Unconfigured runs never clobber a previously collected record.
+  A second, independent Analytics query grouped by the `app` dimension
+  (confirmed live against `/api/v1/analytics/meta`'s dimensions list, not
+  assumed from community docs — same meta endpoint the model/day query
+  already used for metric names) fills `appUsage`: modelUsage-shaped
+  buckets keyed by whatever app string OpenRouter's own detection returns
+  (`"Codex"`, `"pi"`, `"Unknown"`, …), each also carrying `spend` (USD).
+  Verified: summed tokens over the app cut match the model cut for the
+  same window exactly. Entirely fail-soft and independent of the model/day
+  query in both directions — an unknown `app` dimension or a failed probe
+  just leaves `appUsage` out of the record, `--apps-debug` prints the raw
+  app rows to stderr (mirrors the bundled zai collector's `--quota-debug`)
 - `bin/agents-monitor-update` — refresh runner; the panel calls this instead
   of `omarchy-agent-usage-update` directly. Forwards to the stock updater
   (claude/codex/fireworks, honoring `--force`, `--limits-only`, `--except`,
@@ -153,11 +173,13 @@ session-static, and counts only this machine.
   runs never touch the network-bound bundled probes, so opening the panel
   never hits the undocumented z.ai endpoint (the 5-minute zai timer below
   keeps quota fresh instead).
-- `Main.qml` differs from upstream in four spots: the resolved path of
+- `Main.qml` differs from upstream in five spots: the resolved path of
   the bundled runner, the command that uses it, the `scope` passthrough
-  in `displayProvider`, and `providerHasData` admitting the urgent
+  in `displayProvider`, `providerHasData` admitting the urgent
   status+help pairing (so a limits-only record like zai's still earns a
-  tab on a dead, keyless probe with zero local stats to fall back on)
+  tab on a dead, keyless probe with zero local stats to fall back on),
+  and `displayProvider` passing `appUsage` through (device-local only —
+  the cross-device snapshot/aggregate pipeline doesn't carry it yet)
 
 ### The timer (option 2)
 
@@ -214,13 +236,14 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 
 Copy upstream changes in, then re-apply the `Main.qml` patch (the
 runner: `updateBin` property + `updateCommand` first element; the `scope`
-passthrough in `displayProvider`; and `providerHasData` admitting the
-urgent status+help pairing) and the
+and `appUsage` passthroughs in `displayProvider`; and `providerHasData`
+admitting the urgent status+help pairing) and the
 `Panel.qml` patches (the content-fitted provider tab strip: `Flow` instead
 of equal-cell `Row`, buttons at natural width, `contentWidth` grown by
 `naturalRowWidth`; the status box's `authHelpText` visibility gate; the
-usage group boundary with its `usageGroupTitle` header; and
-`serviceProviders` admitting that same urgent status+help pairing) —
+usage group boundary with its `usageGroupTitle` header; `serviceProviders`
+admitting that same urgent status+help pairing; and the CREDIT BURN BY APP
+column on the service card, `appRows()` plus its `Column`/`Repeater`) —
 everything else the fork adds lives in
 files upstream does not have (the `bin/` tree), which cannot conflict. The
 manifest is

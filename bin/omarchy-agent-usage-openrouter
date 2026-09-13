@@ -33,6 +33,25 @@ upstream rename degrades a metric, not the whole collector.
 Stats are account-scoped (scope "account", hasLocalStats false, the
 fireworks convention): they replicate the same upstream truth on every
 synced device, so the sync merge must take the max, not the sum.
+
+Per-app credit burn — the inverse of an agent tab's PER SUBSCRIPTION,
+since OpenRouter's one subscription is spent by many tools: a second,
+independent analytics query grouped by the "app" dimension (confirmed
+live against /api/v1/analytics/meta's dimensions list on 2026-09-13,
+alongside "model", "provider", "workspace" and others — not assumed from
+community docs) fills modelUsage-shaped record["appUsage"] keyed by
+whatever string OpenRouter's own app-detection returns ("Codex", "pi",
+"Unknown", …), each bucket also carrying "spend" (USD) since the query
+already fetches total_usage. Verified 2026-09-13: summed input/output/
+cache/reasoning tokens over the app cut match the model cut for the same
+window exactly. This query is entirely separate from the model/day one
+above and fails independently of it: an unknown "app" dimension (checked
+against the same /meta payload, never assumed) or a failed probe just
+leaves appUsage out of the record, same fail-soft rule as everything
+else here — the model/day analytics this collector already shipped are
+untouched by whatever happens to the app query. --apps-debug prints the
+raw app rows to stderr, mirroring the bundled zai collector's
+--quota-debug.
 """
 
 import json
@@ -65,6 +84,14 @@ METRIC_REASONING = "reasoning_tokens"
 METRIC_CACHE_READ = "cached_tokens"
 METRIC_SPEND = "total_usage"
 METRIC_REQUESTS = "request_count"
+
+# Confirmed against /api/v1/analytics/meta's dimensions list (2026-09-13),
+# not assumed from community docs.
+ANALYTICS_APP_DIMENSION = "app"
+
+# --apps-debug prints this; fetch_app_analytics() stashes for main() (left
+# at this default when scan() never reaches it — no management key).
+_LAST_APP_ROWS = {"rows": None, "reason": "no management key configured"}
 
 AUTH_HELP = (
     "Set OPENROUTER_API_KEY, or put {\"apiKey\": …} in "
@@ -261,6 +288,132 @@ def apply_analytics(record, rows, recent_dates):
     return today_spend
 
 
+# ------------------------------------------------------------ app breakdown
+
+
+def dimension_known(meta_payload, name):
+    """True when /meta lists this dimension by name. False — never a
+    guess — on a parse failure or an unreachable /meta: an endpoint gone
+    quiet is not proof the app cut still exists, so the app query is
+    skipped rather than attempted blind. meta_payload is fetch_json's
+    return value, already unwrapped one level (its own ["data"] already
+    stripped) — this reads "dimensions" straight off it, not through a
+    second ["data"]."""
+    try:
+        for dim in meta_payload.get("dimensions") or []:
+            name_field = dim.get("name") if isinstance(dim, dict) else dim
+            if name_field == name:
+                return True
+    except (AttributeError, TypeError):
+        pass
+    return False
+
+
+def query_app_analytics(key, metrics, start, end):
+    body = json.dumps({
+        "metrics": metrics,
+        "dimensions": [ANALYTICS_APP_DIMENSION],
+        "granularity": "day",
+        "time_range": {"start": start, "end": end},
+        "limit": 1000,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        ANALYTICS_QUERY_URL,
+        data=body,
+        headers={
+            "Authorization": "Bearer " + key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_app_analytics(key, now):
+    """Rows for the last ANALYTICS_WINDOW_DAYS days grouped by day+app, or
+    None on any failure — including "app" simply not being a dimension
+    /meta knows about. Never raises. Entirely independent of
+    fetch_analytics (own /meta round trip, own query): a failure here
+    can't take the model/day analytics down, and a failure there can't
+    hide an app breakdown that would otherwise have worked."""
+    try:
+        meta = fetch_json(ANALYTICS_META_URL, key)
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        meta = {}
+    if not dimension_known(meta, ANALYTICS_APP_DIMENSION):
+        _LAST_APP_ROWS["rows"] = None
+        _LAST_APP_ROWS["reason"] = "\"app\" dimension not listed in /meta"
+        return None
+
+    start = (now - timedelta(days=ANALYTICS_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    metrics = analytics_metrics(meta)
+    try:
+        payload = query_app_analytics(key, metrics, start, end)
+        rows = (payload.get("data") or {}).get("data")
+        if isinstance(rows, list):
+            _LAST_APP_ROWS["rows"] = rows
+            _LAST_APP_ROWS["reason"] = "probe"
+            return rows
+    except urllib.error.HTTPError as error:
+        if error.code in (400, 422) and metrics != [METRIC_REQUESTS]:
+            # A renamed metric upstream: degrade to requests only.
+            try:
+                payload = query_app_analytics(key, [METRIC_REQUESTS], start, end)
+                rows = (payload.get("data") or {}).get("data")
+                if isinstance(rows, list):
+                    _LAST_APP_ROWS["rows"] = rows
+                    _LAST_APP_ROWS["reason"] = "probe (requests only)"
+                    return rows
+            except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+                pass
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        pass
+    _LAST_APP_ROWS["rows"] = None
+    _LAST_APP_ROWS["reason"] = "probe failed"
+    return None
+
+
+def apply_app_analytics(record, rows):
+    """Fold app-dimension rows into record["appUsage"]; never raises. Left
+    out of the record entirely on unusable input — an absent key, not an
+    empty one, is what keeps the panel's app-burn section hidden, same
+    "earned by data" rule as everything else here. Buckets carry
+    modelUsage's token shape plus "spend" (USD), cheap since the query
+    already fetches total_usage."""
+    if not rows:
+        return
+    apps = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        app = str(row.get("app") or "") or "Unknown"
+        input_t = number(row.get(METRIC_INPUT))
+        output_t = number(row.get(METRIC_OUTPUT)) + number(row.get(METRIC_REASONING))
+        cache_t = number(row.get(METRIC_CACHE_READ))
+        spend = money(row.get(METRIC_SPEND)) or 0.0
+        if not (input_t or output_t or cache_t or spend):
+            continue
+        bucket = apps.setdefault(app, {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0,
+            "spend": 0.0,
+        })
+        bucket["inputTokens"] += input_t
+        bucket["outputTokens"] += output_t
+        bucket["cacheReadInputTokens"] += cache_t
+        bucket["spend"] += spend
+    if not apps:
+        return
+    for bucket in apps.values():
+        bucket["spend"] = round(bucket["spend"], 6)
+    record["appUsage"] = apps
+
+
 def scan():
     now = datetime.now(timezone.utc)
     today = now.strftime("%Y-%m-%d")
@@ -286,6 +439,7 @@ def scan():
         "todaySessions": 0,
         "todayTotalTokens": 0,
         "todayTokensByModel": {},
+        "todayAppUsage": {},  # unpopulated, like todayTokensByModel above
         "recentDays": [{"date": d, "messageCount": 0} for d in recent_dates],
         "totalPrompts": 0,
         "totalSessions": 0,
@@ -320,6 +474,7 @@ def scan():
     today_spend = None
     if mkey:
         today_spend = apply_analytics(record, fetch_analytics(mkey, now), recent_dates)
+        apply_app_analytics(record, fetch_app_analytics(mkey, now))
     balance = total - used
     if total > 0:
         record["limits"] = [{
@@ -358,6 +513,15 @@ def write_record(record):
 
 def main():
     record = scan()
+    if "--apps-debug" in sys.argv[1:]:
+        reason = _LAST_APP_ROWS["reason"] or "none"
+        rows = _LAST_APP_ROWS["rows"]
+        sys.stderr.write(f"OpenRouter app-dimension rows (reason: {reason}):\n")
+        if rows is None:
+            sys.stderr.write("  (unavailable — see reason above)\n")
+        else:
+            json.dump(rows, sys.stderr, indent=2)
+            sys.stderr.write("\n")
     if "--write" in sys.argv[1:]:
         if not record["ready"]:
             # Never clobber a previously collected good record with an
