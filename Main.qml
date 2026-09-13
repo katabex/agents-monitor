@@ -225,11 +225,17 @@ Item {
   // A limits-only record (zai) with a dead probe and no local stats at all
   // still deserves its tab when it sets the urgent status+help pairing —
   // that is the remedy the tab exists to show, not something to hide.
+  // The discovery record carries none of the above — no stats, no limits,
+  // no pairing, on purpose (it earns no tab of its own) — but a non-empty
+  // installedUnused is still real data: the AGENT card's footer line, not
+  // a tab, is what it's for. Without this clause the record would never
+  // reach the panel at all.
   function providerHasData(p) {
     return numberValue(p.totalPrompts) > 0 || numberValue(p.totalSessions) > 0
       || numberValue(p.activeDays) > 0 || numberValue(p.todayPrompts) > 0
       || numberValue(p.todaySessions) > 0 || (p.limits && p.limits.length > 0)
       || !!p.balance || (!!p.usageStatusText && !!p.authHelpText)
+      || (Array.isArray(p.installedUnused) && p.installedUnused.length > 0)
   }
 
   // A prepaid agent's credit ledger. Like rate limits, the balance is
@@ -280,6 +286,10 @@ Item {
       // now — the cross-device snapshot/aggregate pipeline below doesn't
       // carry it, so a synced view falls back to empty rather than merge.
       appUsage: synced ? (stats.appUsage || ({})) : (record.appUsage || ({})),
+      // Installed-but-unused catalog labels (the discovery record only):
+      // machine state, not stats — device-local like appUsage, same
+      // reason (the sync pipeline below doesn't carry it).
+      installedUnused: synced ? (stats.installedUnused || []) : (record.installedUnused || []),
       subscriptionUsage: attributionFor(record),
       hasLocalStats: synced ? (stats.hasLocalStats !== false) : (record.hasLocalStats !== false),
       hasPromptStats: synced ? (stats.hasPromptStats !== false) : (record.hasPromptStats !== false),

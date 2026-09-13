@@ -27,7 +27,7 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it), plus a CREDIT BURN BY APP breakdown on the service card (`app` dimension, same management key) |
 | **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) lands on the OpenAI service tab in PER SUBSCRIPTION |
 | **copilot** | — (activity only: copilot 1.0.83 persists no token counts — `session-store.db`'s `assistant_usage_events` is empty, upgrade path documented in the collector) | `~/.copilot/session-store.db` (SQLite, read-only) — prompts are turns with a user message, sessions are sessions that ran a turn, day buckets from turn timestamps; no token claims, so charts stay hidden rather than lie |
-| **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Tabs are earned by renderable token data — activity-only records stay maintained in the usage dir but out of the strip until a parser fills token buckets |
+| **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Tabs are earned by renderable token data — activity-only records stay maintained in the usage dir but out of the strip until a parser fills token buckets. Also writes its own `discovery.json` every run, carrying `installedUnused` — catalog agents installed here but never used and owned by no collector — which the AGENT card shows as a dim footer line instead of a tab |
 
 Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The QML
@@ -51,7 +51,12 @@ carries `appUsage` (OpenRouter today) grows a further CREDIT BURN BY APP
 column below that, reusing the same `ModelRow` share-bar component as
 PER SUBSCRIPTION on the agent card — the inverse mirror: one subscription,
 many tools, instead of one tool, many subscriptions; empty or absent
-`appUsage` just leaves the column out. Tab strips use a local
+`appUsage` just leaves the column out. Below PER SUBSCRIPTION, the agent
+card also carries a dim, card-level footer line — "Installed, never used
+here: Gemini · Crush · Muse Code" — sourced from the discovery record's
+`installedUnused` regardless of which agent tab is selected (machine
+state, not a per-agent fact); empty or absent leaves it out too, same
+"earned by data" rule as every other section. Tab strips use a local
 `StatusTabButton` (stock `Button` geometry and Style-token chrome, minus
 focus states, plus a text color that holds through selection — the kit's
 fixed `selected-color` token washes out a per-tab `foreground` override
@@ -173,13 +178,16 @@ totals-only. Attribution is billing-accurate but session-static, and
   runs never touch the network-bound bundled probes, so opening the panel
   never hits the undocumented z.ai endpoint (the 5-minute zai timer below
   keeps quota fresh instead).
-- `Main.qml` differs from upstream in five spots: the resolved path of
+- `Main.qml` differs from upstream in six spots: the resolved path of
   the bundled runner, the command that uses it, the `scope` passthrough
   in `displayProvider`, `providerHasData` admitting the urgent
   status+help pairing (so a limits-only record like zai's still earns a
   tab on a dead, keyless probe with zero local stats to fall back on),
-  and `displayProvider` passing `appUsage` through (device-local only —
-  the cross-device snapshot/aggregate pipeline doesn't carry it yet)
+  `displayProvider` passing `appUsage` through (device-local only — the
+  cross-device snapshot/aggregate pipeline doesn't carry it yet), and the
+  same two changes again for `installedUnused` (the discovery record's
+  footer-line data, admitted into `providerHasData` and passed through
+  `displayProvider`, also device-local only)
 
 ### The timer (option 2)
 
@@ -235,16 +243,18 @@ diff -u /usr/share/omarchy/shell/plugins/agents/Agent.qml Agent.qml
 ```
 
 Copy upstream changes in, then re-apply the `Main.qml` patch (the
-runner: `updateBin` property + `updateCommand` first element; the `scope`
-and `appUsage` passthroughs in `displayProvider`; and `providerHasData`
-admitting the urgent status+help pairing) and the
+runner: `updateBin` property + `updateCommand` first element; the `scope`,
+`appUsage` and `installedUnused` passthroughs in `displayProvider`; and
+`providerHasData` admitting the urgent status+help pairing and a
+non-empty `installedUnused`) and the
 `Panel.qml` patches (the content-fitted provider tab strip: `Flow` instead
 of equal-cell `Row`, buttons at natural width, `contentWidth` grown by
 `naturalRowWidth`; the status box's `authHelpText` visibility gate; the
 usage group boundary with its `usageGroupTitle` header; `serviceProviders`
-admitting that same urgent status+help pairing; and the CREDIT BURN BY APP
-column on the service card, `appRows()` plus its `Column`/`Repeater`) —
-everything else the fork adds lives in
+admitting that same urgent status+help pairing; the CREDIT BURN BY APP
+column on the service card, `appRows()` plus its `Column`/`Repeater`; and
+the `discoveryProvider` lookup plus the AGENT card's installed-never-used
+footer line) — everything else the fork adds lives in
 files upstream does not have (the `bin/` tree), which cannot conflict. The
 manifest is
 regenerable from upstream with the `jq` rename (`id`, `name`, `author`,

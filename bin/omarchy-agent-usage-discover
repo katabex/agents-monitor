@@ -35,7 +35,19 @@ skipped: their records are the collectors' business, and a discovery
 record would fight them. A used agent whose store later disappears keeps
 its record, stock-style.
 
-No quota probe, no deletion, no network: this layer only ever adds tabs.
+A second, independent record — id "discovery", written every run
+regardless of what the funnel above found — carries `installedUnused`:
+the catalog labels of agents this machine has installed (by the same
+installed check above) but never used, and that no collector owns. The
+panel's AGENT card renders this as a dim footer line ("Installed, never
+used here: …") so those agents are visible without earning a tab; an
+empty list still writes the record (the common case), it just renders no
+line. This is the only field on the record — no stats, no limits, no
+status/help pairing — so discovery never grows a service tab, an agent
+tab, or urgent styling of its own.
+
+No quota probe, no deletion, no network: this layer only ever adds tabs
+(and now one footer line).
 """
 
 import json
@@ -211,6 +223,41 @@ def mvp_record(agent_id, label, active_dates):
     }
 
 
+def discovery_record(installed_unused):
+    """The funnel's own record — never a per-agent tab, just the
+    installed-but-unused footer line. No stats, no limits, no
+    status/help pairing: those are exactly the fields the panel's
+    service/agent/urgent gates check, so this record earns none of them
+    on purpose (see providerHasData's installedUnused clause in
+    Main.qml)."""
+    return {
+        "schemaVersion": 1,
+        "id": "discovery",
+        "name": "Agents Monitor Discovery",
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "ready": True,
+        "hasLocalStats": False,
+        "hasPromptStats": False,
+        "tierLabel": "",
+        "limits": [],
+        "usageStatusText": "",
+        "authHelpText": "",
+        "todayPrompts": 0,
+        "todaySessions": 0,
+        "todayTotalTokens": 0,
+        "todayTokensByModel": {},
+        "recentDays": [],
+        "totalPrompts": 0,
+        "totalSessions": 0,
+        "activeDays": 0,
+        "activeDates": [],
+        "modelUsage": {},
+        "subscriptionUsage": {},
+        "todaySubscriptionUsage": {},
+        "installedUnused": installed_unused,
+    }
+
+
 def write_record(record):
     USAGE_DIR.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".discover.",
@@ -234,6 +281,7 @@ def main():
 
     write = "--write" in sys.argv[1:]
     written = []
+    installed_unused = []
     for agent_id, label in catalog:
         if agent_id in COLLECTOR_OWNED:
             continue
@@ -246,10 +294,18 @@ def main():
             if write:
                 write_record(record)
             written.append(agent_id)
+        elif installed:
+            installed_unused.append(label)
 
     prefix = "wrote" if write else "(dry run) would write"
     for agent_id in written:
         print(f"{prefix} {USAGE_DIR / (agent_id + '.json')}")
+
+    print(f"discovery: {len(installed_unused)} installed-but-unused agent(s)"
+          + (": " + ", ".join(installed_unused) if installed_unused else ""))
+    if write:
+        write_record(discovery_record(installed_unused))
+    print(f"{prefix} {USAGE_DIR / 'discovery.json'}")
     return 0
 
 
