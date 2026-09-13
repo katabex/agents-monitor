@@ -4,9 +4,15 @@
 # Called by the panel with the same arguments the stock widget would pass to
 # omarchy-agent-usage-update (--force, --limits-only, --except <id>, and/or a
 # list of agent ids). Forwards them to the stock updater (claude, codex,
-# fireworks) and runs the bundled pi and opencode collectors under the same
-# rules, so all enabled providers refresh together on the panel's timer and
-# refresh button.
+# fireworks) and runs every bundled collector under the same rules, so all
+# enabled providers refresh together on the panel's timer and refresh
+# button.
+#
+# Bundled collectors are discovered by filename convention: anything
+# shipped as omarchy-agent-usage-<id> (executable, regular file) runs with
+# <id> as its provider id — a new collector is a dropped file, and this
+# list never needs editing. The discovery layer
+# (omarchy-agent-usage-discover) rides the same slot.
 #
 # The external omarchy-pi-usage.timer (option 2) keeps refreshing pi.json
 # between panel refreshes; it is redundant by design, not by accident.
@@ -35,10 +41,16 @@ done
 omarchy-agent-usage-update ${flags[@]+"${flags[@]}"} ${only[@]+"${only[@]}"} \
   $(for id in "${!excluded[@]}"; do printf -- '--except %q ' "$id"; done) || true
 
-# Bundled local collectors (pi, opencode, openrouter, hermes) plus the
-# discovery layer (catalog -> installed -> used -> MVP records): same
+# Bundled local collectors, by filename convention (see header): same
 # inclusion rules as the stock updater applies to its agents.
-for agent in pi opencode openrouter hermes discover; do
+shopt -s nullglob
+for collector in "$script_dir"/omarchy-agent-usage-*; do
+  # A stray backup or editor temp file in bin/ is not a collector; only an
+  # executable regular file whose name the convention owns gets to run.
+  [[ -f $collector && -x $collector ]] || continue
+  agent=${collector##*/}
+  agent=${agent#omarchy-agent-usage-}
+  [[ -n $agent ]] || continue
   run=1
   if [[ -n ${excluded[$agent]:-} ]]; then
     run=0
@@ -50,6 +62,7 @@ for agent in pi opencode openrouter hermes discover; do
   fi
 
   if (( run )) && [[ " ${flags[*]:-} " != *" --limits-only "* ]]; then
-    "$script_dir/omarchy-agent-usage-$agent" --write >/dev/null || true
+    "$collector" --write >/dev/null || true
   fi
 done
+shopt -u nullglob
