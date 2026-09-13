@@ -81,6 +81,16 @@ Panel {
   readonly property var service: serviceProviders.length > 0 ? serviceProviders[serviceIndex] : null
   readonly property var agent: agentProviders.length > 0 ? agentProviders[agentIndex] : null
 
+  // The discovery record earns no tab of its own (see providerHasData's
+  // installedUnused clause) — it sits in root.providers directly, found
+  // by id, so its installedUnused list can back the AGENT card's footer
+  // line regardless of which agent tab happens to be selected.
+  readonly property var discoveryProvider: {
+    for (var i = 0; i < providers.length; i++)
+      if (providers[i].providerId === "discovery") return providers[i]
+    return null
+  }
+
   // Legacy alias: bar-icon alarming and the IPC cursor follow the service
   // card — its windows are what stop the next prompt.
   readonly property var provider: service
@@ -442,6 +452,16 @@ Panel {
     if (provider && provider.syncEnabled && provider.syncDeviceCount > 0)
       return "Merged from " + provider.syncDeviceCount + " device" + (provider.syncDeviceCount === 1 ? "" : "s")
     return ""
+  }
+
+  // AGENT card footer: catalog agents installed on this machine but never
+  // used, and owned by no collector — visible without earning a tab.
+  // Empty (the common case) renders no line at all.
+  function installedUnusedText() {
+    var p = discoveryProvider
+    var list = p && Array.isArray(p.installedUnused) ? p.installedUnused : []
+    if (list.length === 0) return ""
+    return "Installed, never used here: " + list.join(" · ")
   }
 
   // Agents that ship a white mark carry an `assets/<id>-light.svg` twin for
@@ -996,6 +1016,21 @@ Panel {
                     share: modelData.total / Math.max(1, subscriptionSection.rows[0].total)
                   }
                 }
+              }
+
+              // ---------- Installed, never used ----------
+              // Machine state, not this agent's — the discovery record,
+              // not root.agent, so the line never changes with the
+              // selected tab. Unobtrusive on purpose: a caption, not a row.
+              Text {
+                textFormat: Text.PlainText
+                visible: text !== ""
+                width: parent.width
+                text: root.installedUnusedText()
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
               }
 
             }
