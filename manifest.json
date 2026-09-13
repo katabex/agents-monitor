@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "ptr.agents-monitor",
   "name": "Agents Monitor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "ptr",
   "license": "MIT",
   "description": "Claude Code, Codex, Fireworks, pi, OpenCode (with z.ai GLM Coding Plan quota), and OpenRouter credit usage, limits, and pace in an Omarchy bar panel. Fork of the stock omarchy.agents widget with built-in pi, OpenCode, and OpenRouter collection.",

@@ -37,8 +37,16 @@ selected service's mark; the Z.ai tab shows Z.ai's own mark (traced from
 the official logo) even though its data rides the opencode record until
 Z.ai gets its own. Account-scoped services (OpenRouter, Fireworks) carry
 their day/model charts inside the service card under `USAGE — ACCOUNT` —
-their tokens are credit burn, subscription data. Strips size tabs to
-their name text and grow the panel to keep one row; the usage title names
+their tokens are credit burn, subscription data. Tab strips use a local
+`StatusTabButton` (stock `Button` geometry and Style-token chrome, minus
+focus states, plus a text color that holds through selection — the kit's
+fixed `selected-color` token washes out a per-tab `foreground` override
+exactly when you select the tab). Strips size tabs to
+their name text and grow the panel to keep one row; subscription tab
+names wear their subscription's status color — urgent when a limit
+window is ≥ 90% spent, the prepaid balance is ≤ 10% left, or the probe
+failed (the same `serviceAlarming` word the bar icon speaks); the usage
+title names
 whose truth the charts tell (`USAGE — ACCOUNT` vs
 `USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent status box shows only
 when a record sets both `usageStatusText` and `authHelpText` (stock

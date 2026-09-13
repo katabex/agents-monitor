@@ -93,7 +93,25 @@ Panel {
   // last 10% of the funded credits lights the same alarm.
   readonly property bool balanceAlarming: !!balance && balance.funded > 0
     && balance.remaining / balance.funded <= 0.1
-  readonly property bool alarming: (!!headline && headline.percent >= 0.9) || balanceAlarming
+  readonly property bool alarming: serviceAlarming(service)
+
+  // One status vocabulary for the whole panel: a subscription is urgent
+  // when its fullest limit window is nearly spent, its prepaid balance is
+  // nearly drained, or its probe failed outright (headline AND remedy both
+  // set — the status-box contract; stock collectors leave stale help text
+  // on healthy records, so help alone must never count). The service tab
+  // names wear this as their text color, so the strip doubles as a status
+  // row, and the bar icon speaks the same word for the selected service.
+  function serviceAlarming(p) {
+    if (!p) return false
+    if (String(p.usageStatusText || "") !== "" && String(p.authHelpText || "") !== "")
+      return true
+    var windows = limitWindows(p)
+    for (var i = 0; i < windows.length; i++)
+      if (Number(windows[i].percent) >= 0.9) return true
+    var b = p.balance
+    return !!b && Number(b.funded) > 0 && Number(b.remaining) / Number(b.funded) <= 0.1
+  }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
   function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
@@ -555,8 +573,10 @@ Panel {
           // ---------- Service card ----------
           // One tab per thing you pay for; the strip names the company
           // (Anthropic, not Claude Code). Balance and limit meters are the
-          // account's state — the same truth on every machine. Selecting a
-          // tab here never disturbs the agent card below.
+          // account's state — the same truth on every machine. Tab names
+          // carry their subscription's status color (see serviceAlarming),
+          // so the strip reads as a status row even before you select.
+          // Selecting a tab here never disturbs the agent card below.
           BorderSurface {
             visible: root.serviceProviders.length > 0
             width: parent.width
@@ -639,7 +659,7 @@ Panel {
                   onItemAdded: function(index, item) { Qt.callLater(serviceStrip.syncNaturalWidth) }
                   onItemRemoved: function(index, item) { serviceStrip.syncNaturalWidth() }
 
-                  Button {
+                  StatusTabButton {
                     required property var modelData
                     required property int index
 
@@ -648,11 +668,9 @@ Panel {
                     text: root.serviceName(modelData)
                     selected: index === root.serviceIndex
                     hasCursor: root.cursorActive && root.serviceFocus && index === root.serviceIndex
-                    bordered: true
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    fontSize: Style.font.bodySmall
-                    verticalPadding: Style.spacing.controlPaddingY
+                    // The name IS the status lamp: urgent when the record is
+                    // alarming, theme foreground when healthy.
+                    statusColor: root.serviceAlarming(modelData) ? root.urgent : root.foreground
                     onClicked: {
                       root.cursorActive = true
                       root.serviceFocus = true
@@ -859,7 +877,9 @@ Panel {
                   onItemAdded: function(index, item) { Qt.callLater(agentStrip.syncNaturalWidth) }
                   onItemRemoved: function(index, item) { agentStrip.syncNaturalWidth() }
 
-                  Button {
+                  // Same component as the service strip so both cards keep
+                  // one tab look; agents just never carry a status color.
+                  StatusTabButton {
                     required property var modelData
                     required property int index
 
@@ -868,11 +888,6 @@ Panel {
                     text: root.agentName(modelData)
                     selected: index === root.agentIndex
                     hasCursor: root.cursorActive && !root.serviceFocus && index === root.agentIndex
-                    bordered: true
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    fontSize: Style.font.bodySmall
-                    verticalPadding: Style.spacing.controlPaddingY
                     onClicked: {
                       root.cursorActive = true
                       root.serviceFocus = false
@@ -936,6 +951,93 @@ Panel {
           }
         }
       }
+    }
+  }
+
+  // The stock Button minus what a tab strip never uses, plus the one thing
+  // stock cannot do: a text color that survives selection. The kit derives
+  // the selected text color from the fixed `selected-color` theme token
+  // (a literal hex in generated themes), so the sanctioned per-instance
+  // `foreground` override — the way to tint a button — washes out the
+  // instant the tab is selected, exactly when you are looking at it
+  // (observed live: OpenAI at 95% lost its urgent name on selection).
+  // Here the status color wins in every state; selection speaks through
+  // bold text and the chrome fills, and every fill/border still comes from
+  // the same Style tokens, so themes keep full control. Geometry mirrors
+  // stock (border reservation included) so strip sizing is unchanged;
+  // focus-ring states are dropped because tab strips are never Tab-focusable.
+  component StatusTabButton: BorderSurface {
+    id: tab
+
+    property string text: ""
+    property bool selected: false
+    property bool hasCursor: false
+    property color statusColor: root.foreground
+    property string fontFamily: root.fontFamily
+    property real fontSize: Style.font.bodySmall
+    property real verticalPadding: Style.spacing.controlPaddingY
+
+    signal clicked()
+    signal hovered(bool isHovered)
+
+    leftPadding: Style.spacing.controlPaddingX
+    rightPadding: Style.spacing.controlPaddingX
+    topPadding: verticalPadding
+    bottomPadding: verticalPadding
+
+    readonly property bool hot: mouseArea.containsMouse || hasCursor
+    readonly property var _hoverBorderSpec: Border.controlSpec("hover-cursor", root.foreground, root.accent)
+    readonly property var _selectedBorderSpec: Border.controlSpec("selected", root.foreground, root.accent)
+    readonly property var _normalBorderSpec: Border.controlSpec("normal", root.foreground, root.accent)
+    // Tabs are always bordered (stock delegates pass bordered: true), and a
+    // selected tab keeps the normal border unless the theme opts into a
+    // dedicated selected border — same precedence as stock.
+    readonly property var _borderSpec: hot ? _hoverBorderSpec
+      : selected ? (Border.controlHasWidth("selected") ? _selectedBorderSpec : _normalBorderSpec)
+      : _normalBorderSpec
+
+    // Reserve the largest border any state can paint, as stock does, so the
+    // control doesn't grow a pixel per side on hover and relayout the strip.
+    readonly property real _reservedBorderTop: Math.max(Border.top(_hoverBorderSpec), Border.top(_selectedBorderSpec), Border.top(_normalBorderSpec))
+    readonly property real _reservedBorderRight: Math.max(Border.right(_hoverBorderSpec), Border.right(_selectedBorderSpec), Border.right(_normalBorderSpec))
+    readonly property real _reservedBorderBottom: Math.max(Border.bottom(_hoverBorderSpec), Border.bottom(_selectedBorderSpec), Border.bottom(_normalBorderSpec))
+    readonly property real _reservedBorderLeft: Math.max(Border.left(_hoverBorderSpec), Border.left(_selectedBorderSpec), Border.left(_normalBorderSpec))
+
+    implicitWidth: label.implicitWidth + leftPadding + rightPadding + _reservedBorderLeft + _reservedBorderRight
+    implicitHeight: label.implicitHeight + topPadding + bottomPadding + _reservedBorderTop + _reservedBorderBottom
+    radius: Style.cornerRadius
+
+    color: mouseArea.pressed ? Style.pressedFillFor(root.foreground, root.accent)
+      : hot ? Style.hoverFillFor(root.foreground, root.accent)
+      : selected ? Style.selectedFillFor(root.foreground, root.accent)
+      : "transparent"
+    borderSpec: _borderSpec
+
+    Behavior on color { ColorAnimation { duration: 120 } }
+
+    Text {
+      id: label
+      textFormat: Text.PlainText
+      text: tab.text
+      // Status beats selection: the color is the information, so it holds
+      // in every state; selection says its piece through bold + chrome.
+      color: tab.statusColor
+      font.family: tab.fontFamily
+      font.pixelSize: tab.fontSize
+      font.bold: tab.selected
+      anchors.centerIn: parent
+    }
+
+    MouseArea {
+      id: mouseArea
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: tab.clicked()
+    }
+
+    HoverHandler {
+      onHoveredChanged: tab.hovered(hovered)
     }
   }
 
