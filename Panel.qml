@@ -50,6 +50,11 @@ Panel {
         var usageModels = p.modelUsage || {}
         for (var k in usageModels) { has = true; break }
       }
+      // Discovery MVP records (usage detected, parser pending) carry no
+      // tokens at all — day activity is their whole truth, and it is
+      // enough to have run here.
+      if (!has && Number(p.activeDays || 0) > 0)
+        has = true
       if (has) result.push(p)
     }
     return result
@@ -429,6 +434,11 @@ Panel {
     if (colorLuminance(surfaceColor || Color.background) >= 0.5)
       candidates.push(Qt.resolvedUrl("assets/" + id + "-light.svg"))
     candidates.push(Qt.resolvedUrl("assets/" + id + ".svg"))
+    // Last resort for providers without a shipped mark (discovery-found
+    // agents): the terminal-prompt chevron says "an agent ran here".
+    if (colorLuminance(surfaceColor || Color.background) >= 0.5)
+      candidates.push(Qt.resolvedUrl("assets/agent-fallback-light.svg"))
+    candidates.push(Qt.resolvedUrl("assets/agent-fallback.svg"))
     return candidates
   }
 

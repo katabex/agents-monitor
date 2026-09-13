@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""Agents Monitor discovery layer: catalog → installed → used → MVP record.
+
+The Omarchy agent catalog names everything this distro considers an agent;
+this collector walks that funnel for the agents no dedicated collector owns
+yet and, for each one whose local store shows real usage, writes an MVP
+activity record into the stock usage directory — so the agent earns a tab
+the moment it is used here, even before a stats parser exists. MVP records
+claim no tokens (recentDays/modelUsage stay empty; the day chart and model
+rows stay hidden); `activeDays` is what admits the tab, and
+`usageStatusText` says exactly what the record is.
+
+Funnel, and where each stage's truth comes from:
+
+  catalog    parsed at runtime from omarchy-menu.jsonc
+             (`setup.default.agent.<id>` — labels included). jsonc is
+             stripped (line comments, trailing commas) then json-parsed;
+             any failure falls back to the vendored list below, so an
+             upstream format change degrades, never breaks.
+  installed  replicates omarchy-default-agent's agent_present(): hermes and
+             openclaw probe their own installers' --check (first-boot stubs
+             on PATH are NOT installs); everyone else is installed when
+             ~/.local/bin/<id> is the user's own executable (symlink, or a
+             file that is not a mise wrapper) or `mise where <package>`
+             resolves. Coupling documented in the repo overview.
+  used       the agent's store dir contains a non-empty data-ish file
+             (*.jsonl/*.log/*.db/*.sqlite*/checkpoint or *chat*/*session*/*
+             history* named), bounded walk (node_modules and caches
+             skipped). Store mtimes become `activeDates` — honest day
+             activity, no token claims.
+
+Agents owned by dedicated collectors (claude, codex, fireworks — stock;
+pi, opencode, openrouter, hermes — bundled; omp folded into pi) are
+skipped: their records are the collectors' business, and a discovery
+record would fight them. A used agent whose store later disappears keeps
+its record, stock-style.
+
+No quota probe, no deletion, no network: this layer only ever adds tabs.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+MENU_PATH = Path("/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc")
+
+# Vendored mirror of the catalog (id, label) for when the menu file moves,
+# changes shape, or fails to parse. Extend when Omarchy adds an agent.
+FALLBACK_CATALOG = [
+    ("claude", "Claude"), ("codex", "Codex"), ("copilot", "Copilot"),
+    ("crush", "Crush"), ("cursor-agent", "Cursor CLI"), ("gemini", "Gemini"),
+    ("grok", "Grok"), ("hermes", "Hermes"), ("muse", "Muse Code"),
+    ("omp", "omp"), ("openclaw", "OpenClaw"), ("opencode", "OpenCode"),
+    ("pi", "Pi"),
+]
+
+# Records these ids own; discovery must never write them.
+COLLECTOR_OWNED = {
+    "claude", "codex", "fireworks",  # stock collectors
+    "pi", "opencode", "openrouter", "hermes",  # bundled collectors
+    "omp",  # folded into the pi record
+}
+
+# omarchy-default-agent's package spellings (mise specs). Missing id → the
+# id itself is the package, as in the bash.
+MISE_PACKAGES = {
+    "omp": "github:can1357/oh-my-pi",
+    "grok": "npm:@xai-official/grok",
+    "muse": ("http:muse[url=https://api.meta.ai/muse-launcher.sh,bin=muse,"
+             "version_list_url=https://api.meta.ai/muse-code/channels/"
+             "muse-stable,version_json_path=.version]"),
+}
+
+# Agents with their own installer scripts own their installed-check.
+INSTALLER_CHECK = {
+    "hermes": "omarchy-install-hermes-cli",
+    "openclaw": "omarchy-install-openclaw-cli",
+}
+
+# Candidate store locations per catalog id (first probe with data wins).
+STORE_HINTS = {
+    "copilot": [".copilot"],
+    "crush": [".config/crush", ".local/share/crush"],
+    "cursor-agent": [".cursor"],
+    "gemini": [".gemini", ".config/gemini"],
+    "grok": [".grok", ".config/grok"],
+    "muse": [".muse", ".config/muse", ".local/share/muse"],
+    "openclaw": [".openclaw", ".config/openclaw"],
+}
+
+DATA_SUFFIXES = (".jsonl", ".log", ".db", ".sqlite", ".sqlite3")
+DATA_NAME_PARTS = ("chat", "session", "history", "checkpoint")
+WALK_SKIP = ("node_modules", "cache", "audio_cache", ".git")
+WALK_LIMIT = 2000
+
+
+def parse_catalog():
+    """[(id, label)] from the menu jsonc, or the vendored fallback."""
+    try:
+        raw = MENU_PATH.read_text(encoding="utf-8")
+        cleaned = re.sub(r"(?m)^\s*//.*$", "", raw)
+        cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
+        entries = json.loads(cleaned)
+        out = []
+        for key, value in entries.items():
+            if not key.startswith("setup.default.agent."):
+                continue
+            agent_id = key[len("setup.default.agent."):]
+            label = str((value or {}).get("label") or agent_id)
+            out.append((agent_id, label))
+        if out:
+            return out, "menu"
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"catalog: menu parse failed ({error}); using vendored list",
+              file=sys.stderr)
+    return list(FALLBACK_CATALOG), "fallback"
+
+
+def user_install(agent_id):
+    """~/.local/bin/<id> is the user's own executable (not a mise wrapper),
+    exactly as omarchy-default-agent's user_install() decides it."""
+    path = Path.home() / ".local" / "bin" / agent_id
+    if not (path.is_file() and os.access(path, os.X_OK)):
+        return False
+    if path.is_symlink():
+        return True
+    try:
+        return "mise use -g" not in path.read_text(encoding="utf-8",
+                                                   errors="replace")
+    except OSError:
+        return False
+
+
+def agent_present(agent_id):
+    installer = INSTALLER_CHECK.get(agent_id)
+    if installer:
+        return subprocess.run([installer, "--check"], capture_output=True).returncode == 0
+    if user_install(agent_id):
+        return True
+    package = MISE_PACKAGES.get(agent_id, agent_id)
+    return subprocess.run(["mise", "where", package], capture_output=True).returncode == 0
+
+
+def probe_store(agent_id):
+    """(used, active_dates) from the agent's store; bounded, read-only."""
+    for hint in STORE_HINTS.get(agent_id, []):
+        root = Path.home() / hint
+        if not root.is_dir():
+            continue
+        seen = 0
+        days = set()
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in WALK_SKIP]
+            for name in filenames:
+                seen += 1
+                if seen > WALK_LIMIT:
+                    return True, sorted(days)
+                path = Path(dirpath) / name
+                try:
+                    if path.stat().st_size == 0:
+                        continue
+                except OSError:
+                    continue
+                stem = name.lower()
+                if (stem.endswith(DATA_SUFFIXES)
+                        or any(part in stem for part in DATA_NAME_PARTS)):
+                    days.add(datetime.fromtimestamp(
+                        path.stat().st_mtime).strftime("%Y-%m-%d"))
+        if days:
+            return True, sorted(days)
+    return False, []
+
+
+def mvp_record(agent_id, label, active_dates):
+    today = datetime.now().strftime("%Y-%m-%d")
+    return {
+        "schemaVersion": 1,
+        "id": agent_id,
+        "name": label,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "ready": True,
+        "hasLocalStats": True,
+        "hasPromptStats": False,
+        "tierLabel": "usage detected",
+        "limits": [],
+        "usageStatusText": "usage detected — no stats parser yet",
+        "authHelpText": "",
+        "todayPrompts": 0,
+        "todaySessions": 0,
+        "todayTotalTokens": 0,
+        "todayTokensByModel": {},
+        "recentDays": [],
+        "totalPrompts": 0,
+        "totalSessions": 0,
+        "activeDays": len(active_dates),
+        "activeDates": active_dates,
+        "modelUsage": {},
+        "subscriptionUsage": {},
+        "todaySubscriptionUsage": {},
+        "discovered": True,
+        "activeToday": today in active_dates,
+    }
+
+
+def write_record(record):
+    USAGE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(USAGE_DIR), prefix=".discover.",
+                               text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, str(USAGE_DIR / (record["id"] + ".json")))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main():
+    catalog, source = parse_catalog()
+    print(f"catalog ({source}): {len(catalog)} agents")
+
+    write = "--write" in sys.argv[1:]
+    written = []
+    for agent_id, label in catalog:
+        if agent_id in COLLECTOR_OWNED:
+            continue
+        installed = agent_present(agent_id)
+        used, days = probe_store(agent_id)
+        state = "used" if used else ("installed" if installed else "absent")
+        print(f"  {agent_id:13s} {state:9s} days={len(days)}")
+        if used:
+            record = mvp_record(agent_id, label, days)
+            if write:
+                write_record(record)
+            written.append(agent_id)
+
+    prefix = "wrote" if write else "(dry run) would write"
+    for agent_id in written:
+        print(f"{prefix} {USAGE_DIR / (agent_id + '.json')}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

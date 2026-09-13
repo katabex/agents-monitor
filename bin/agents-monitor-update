@@ -35,9 +35,10 @@ done
 omarchy-agent-usage-update ${flags[@]+"${flags[@]}"} ${only[@]+"${only[@]}"} \
   $(for id in "${!excluded[@]}"; do printf -- '--except %q ' "$id"; done) || true
 
-# Bundled local collectors (pi, opencode, openrouter, hermes): same
+# Bundled local collectors (pi, opencode, openrouter, hermes) plus the
+# discovery layer (catalog -> installed -> used -> MVP records): same
 # inclusion rules as the stock updater applies to its agents.
-for agent in pi opencode openrouter hermes; do
+for agent in pi opencode openrouter hermes discover; do
   run=1
   if [[ -n ${excluded[$agent]:-} ]]; then
     run=0
