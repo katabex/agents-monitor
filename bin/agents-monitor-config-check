@@ -19,10 +19,14 @@ files, the same precedence), so a configured-but-failing subscription -
 expired sign-in, dead network - keeps its urgent remedy tab, and only a
 service with no credentials anywhere is hidden.
 
-Usage: agents-monitor-config-check [id ...]
+Usage: agents-monitor-config-check [--status] [id ...]
   Patch only the named ids (claude codex fireworks openrouter); default
   all four. Reads nothing but credential files; writes records in place
-  via the same atomic write the collectors use.
+  via the same atomic write the collectors use. --status is a read-only
+  query mode that prints "id=true|false" lines and touches nothing -
+  the runner uses it up front to except unconfigured ids from the
+  stock updater, whose rewrites land without the field and would flash
+  a hidden tab for the moment between its write and the stamp below.
 """
 
 import json
@@ -147,7 +151,18 @@ def write_record(path, record):
 
 
 def main(argv):
-    ids = [arg for arg in argv[1:] if arg in CHECKS] or list(STOCK_IDS)
+    status = False
+    ids = []
+    for arg in argv[1:]:
+        if arg == "--status":
+            status = True
+        elif arg in CHECKS:
+            ids.append(arg)
+    ids = ids or list(STOCK_IDS)
+    if status:
+        for agent_id in ids:
+            print(f"{agent_id}={'true' if CHECKS[agent_id]() else 'false'}")
+        return 0
     for agent_id in ids:
         check = CHECKS[agent_id]
         path = USAGE_DIR / (agent_id + ".json")

@@ -165,9 +165,15 @@ was reduced to level + reset.
   collector's own key resolution) into the stock records — which upstream
   writes without the field — and into `openrouter.json`, whose collector
   writes nothing when keyless, so a removed key would otherwise leave a
-  stale record claiming a live subscription. The runner calls it after
-  every pass, filters or not; the panel hides `configured === false`
-  subscriptions (absent = unknown = shown)
+  stale record claiming a live subscription. The runner calls it twice:
+  `--status` (read-only, prints `id=true|false`) before the stock
+  updater so an unconfigured id is excepted from the run entirely — its
+  record is never rewritten without the stamp, which is what briefly
+  flashed the hidden Fireworks tab on panel open (v0.8.3) — and a stamp
+  pass after every refresh, filters or not. The panel hides
+  `configured === false` subscriptions (absent = unknown = shown;
+  Main.qml additionally memoizes the last explicit value per id so a
+  transiently field-less rewrite can't flash a hidden tab either)
 - `bin/omarchy-agent-usage-openrouter` — Python collector; balance meter
   from OpenRouter's official credits/auth-key endpoints, plus token stats
   (today / by day / by model) from the Analytics API. Keys: balance needs

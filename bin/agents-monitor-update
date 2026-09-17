@@ -37,6 +37,18 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# A stock-collector rewrite lands without the `configured` field, and the
+# panel watches the usage dir live: between that write and the stamp pass
+# at the end, an unconfigured service would flash its tab on every open.
+# So an unconfigured stock id never gets rewritten at all - except it up
+# front (--status is a read-only query; the same map already carries any
+# user --except flags into both the stock and bundled runs below).
+while IFS='=' read -r except_id except_state; do
+  if [[ -n $except_id && $except_state == false ]]; then
+    excluded[$except_id]=1
+  fi
+done < <("$script_dir/agents-monitor-config-check" --status 2>/dev/null)
+
 # Stock collectors: claude, codex, fireworks.
 omarchy-agent-usage-update ${flags[@]+"${flags[@]}"} ${only[@]+"${only[@]}"} \
   $(for id in "${!excluded[@]}"; do printf -- '--except %q ' "$id"; done) || true

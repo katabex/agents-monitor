@@ -201,8 +201,7 @@ Item {
       if (!providerEnabled(id)) continue
       var display = displayProvider(record)
       if (providerHasData(display)) result.push(display)
-    }
-    // An agent that only ever ran on another machine has no local record, but
+    }    // An agent that only ever ran on another machine has no local record, but
     // its synced numbers still deserve a tab. Rate limits stay blank — they
     // are per-account and never travel.
     var syncedProviders = syncConfigured() && aggregateData && aggregateData.providers ? aggregateData.providers : {}
@@ -254,6 +253,26 @@ Item {
     }
   }
 
+  // Session memory of the last explicit `configured` value per provider
+  // id. Records are watched live, and a mid-session rewrite can land
+  // without the field (the stock updater writes none; the runner now
+  // excepts unconfigured ids so its own path cannot, but any other
+  // rewriter still could): "absent = unknown = shown" would flash a
+  // hidden subscription's tab back for exactly that moment. The memo
+  // holds the last explicit value until a new explicit one contradicts
+  // it, so a transient absence renders as no change at all.
+  property var configuredMemo: ({})
+
+  function resolvedConfigured(record) {
+    var id = String(record.id || "")
+    if (record.configured !== undefined) {
+      configuredMemo[id] = record.configured !== false
+      return configuredMemo[id]
+    }
+    if (configuredMemo[id] !== undefined) return configuredMemo[id]
+    return true
+  }
+
   function displayProvider(record) {
     var stats = syncedStatsFor(String(record.id))
     var synced = !!stats
@@ -266,7 +285,10 @@ Item {
       // Machine-local configuration state (false = no credentials on this
       // machine; absent = unknown, treated as configured so stock records
       // and old synced snapshots never vanish). Never travels in sync.
-      configured: record.configured !== false,
+      // resolvedConfigured memoizes: a field dropped by a mid-session
+      // rewrite renders as the last explicit value, not a flash of
+      // "unknown".
+      configured: resolvedConfigured(record),
       usageStatusText: String(record.usageStatusText || ""),
       authHelpText: String(record.authHelpText || ""),
 
