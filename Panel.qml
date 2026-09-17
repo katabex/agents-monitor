@@ -71,7 +71,23 @@ Panel {
       // (discovery MVPs, copilot's token-less store) stay out too.
       if (has) result.push(p)
     }
+    // Most used first (user decision 2026-09-17): the same 7-day window
+    // that admits a tab ranks it (recentDays summed, descending, stable
+    // for ties), so the strip's order can never disagree with the day
+    // chart it selects into - the heaviest bar of the week leads.
+    result.sort(function(a, b) { return weekTokens(b) - weekTokens(a) })
     return result
+  }
+
+  // An agent's use in the strip's own window: the sum of recentDays -
+  // the last 7 calendar days, exactly the buckets TOKENS BY DAY renders.
+  // Synced providers carry the fleet-wide merge of the same buckets.
+  function weekTokens(p) {
+    var days = p ? (p.recentDays || []) : []
+    var total = 0
+    for (var i = 0; i < days.length; i++)
+      total += Number(days[i].messageCount || 0)
+    return total
   }
 
   // Selections follow the provider, not the slot it happens to sit in: a
