@@ -46,13 +46,19 @@ rm -f "$HOME/.config/systemd/user/omarchy-opencode-usage.service" \
       "$HOME/.config/systemd/user/omarchy-opencode-usage.timer"
 
 # Z.ai quota: 5-minute network probe between panel refreshes and while
-# the shell is down (same cadence as the pi timer).
+# the shell is down (same cadence as the pi timer). The pi timer ships
+# here too, overwriting the machine-local predecessor unit of the same
+# name: that one ran a September-6 ~/.local/bin build without
+# subscription attribution, and its rewrites dropped the field every 5
+# minutes (see the unit file for the full story).
 mkdir -p "$HOME/.config/systemd/user"
 cp "$SRC/systemd/omarchy-zai-usage.service" \
    "$SRC/systemd/omarchy-zai-usage.timer" \
+   "$SRC/systemd/omarchy-pi-usage.service" \
+   "$SRC/systemd/omarchy-pi-usage.timer" \
    "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
-systemctl --user enable --now omarchy-zai-usage.timer
+systemctl --user enable --now omarchy-zai-usage.timer omarchy-pi-usage.timer
 
 # QML changes need a shell restart: the hot-reload path serves cached
 # components (see header comment).

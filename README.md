@@ -37,7 +37,17 @@ Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks) and an AGENT card (one tab
 per thing that ran in the last 7 days: Claude Code, Codex, OpenCode, pi,
 Hermes — an agent idle for a week leaves the strip until its next token
 (account-scoped providers are services, never agents), each
-switching independently. The subscription card answers exactly two
+switching independently. The subscription strip is ordered by use,
+most used first (user decision 2026-09-17): each subscription's rank is
+the larger of its agents' attributed token total (`subscriptionUsage`,
+summed across agents - the same numbers PER SUBSCRIPTION renders) and
+its own record's all-time token total (authoritative account analytics
+for OpenRouter/Fireworks; identical to the attribution for
+claude/codex by construction). All-time, because attribution exists
+only as totals; subscriptions with no usage signal keep their record
+order after the used ones.
+
+The subscription card answers exactly two
 questions and only those (user decision 2026-09-17): how full the
 allowance is, and when it resets — one row per limit window (title,
 percent, meter, reset countdown), plus a prepaid-balance row (money

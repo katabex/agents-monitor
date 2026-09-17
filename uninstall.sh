@@ -10,10 +10,14 @@ DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
 omarchy plugin disable ptr.agents-monitor 2>/dev/null || true
 omarchy plugin enable omarchy.agents --after omarchy.tailscale
 
-# Z.ai usage timer: off with the plugin (its collector lives in it).
-systemctl --user disable --now omarchy-zai-usage.timer 2>/dev/null || true
+# Z.ai and pi usage timers: off with the plugin (their collectors live
+# in it). The pi unit replaced a machine-local predecessor of the same
+# name (see install.sh), so removing it also removes that one.
+systemctl --user disable --now omarchy-zai-usage.timer omarchy-pi-usage.timer 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/omarchy-zai-usage.service" \
-      "$HOME/.config/systemd/user/omarchy-zai-usage.timer"
+      "$HOME/.config/systemd/user/omarchy-zai-usage.timer" \
+      "$HOME/.config/systemd/user/omarchy-pi-usage.service" \
+      "$HOME/.config/systemd/user/omarchy-pi-usage.timer"
 
 # Legacy cleanup for installs ≤ v0.4.3: the timer shipped as
 # omarchy-opencode-usage before the z.ai quota probe moved to its own

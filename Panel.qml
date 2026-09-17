@@ -42,6 +42,13 @@ Panel {
           || (String(p.usageStatusText || "") !== "" && String(p.authHelpText || "") !== ""))
         result.push(p)
     }
+    // Most used first (user decision 2026-09-17): see subscriptionUse.
+    var use = subscriptionUseTotals()
+    for (var j = 0; j < result.length; j++) {
+      var id = String(result[j].providerId)
+      use[id] = Math.max(use[id] || 0, modelUsageTotal(result[j]))
+    }
+    result.sort(function(a, b) { return use[String(b.providerId)] - use[String(a.providerId)] })
     return result
   }
   readonly property var agentProviders: {
@@ -362,6 +369,57 @@ Panel {
     return map[String(id)] || String(id)
   }
 
+  // ---------------------------------------------------------------- ranking
+
+  // Subscription ids arrive as the collectors wrote them; a few aliases
+  // name the same service (hermes builds have written "openai-codex" for
+  // OpenAI). Normalize before ranking so a subscription's use adds up
+  // across every spelling.
+  function subscriptionRankId(rawId) {
+    var map = { "openai-codex": "codex", anthropic: "claude", "zai-coding-plan": "zai" }
+    return map[String(rawId)] || String(rawId)
+  }
+
+  // How much each subscription actually gets used, from the agent side:
+  // every agent's attributed tokens (the same subscriptionUsage numbers PER
+  // SUBSCRIPTION renders on the agent card), summed per subscription.
+  // All-time, because attribution exists only as totals - per-subscription
+  // day history is not in the record contract.
+  function subscriptionUseTotals() {
+    var totals = {}
+    for (var i = 0; i < providers.length; i++) {
+      var usageBySub = providers[i] ? (providers[i].subscriptionUsage || {}) : {}
+      for (var id in usageBySub) {
+        var bucket = usageBySub[id] || {}
+        var total = Number(bucket.inputTokens || 0) + Number(bucket.outputTokens || 0)
+          + Number(bucket.cacheReadInputTokens || 0) + Number(bucket.cacheCreationInputTokens || 0)
+        if (total > 0) {
+          var key = subscriptionRankId(id)
+          totals[key] = (totals[key] || 0) + total
+        }
+      }
+    }
+    return totals
+  }
+
+  // The service side of the same question: a record's own all-time token
+  // total. For account-scoped services (OpenRouter, Fireworks) this is
+  // authoritative analytics - every app that burned the key, not just the
+  // agents that attribute - so the strip's rank takes the larger of the
+  // two sides per subscription: the truth without double counting (for
+  // claude/codex both sides coincide by construction - their attribution
+  // is synthesized from exactly these totals).
+  function modelUsageTotal(p) {
+    var usageByModel = p ? (p.modelUsage || {}) : {}
+    var total = 0
+    for (var id in usageByModel) {
+      var bucket = usageByModel[id] || {}
+      total += Number(bucket.inputTokens || 0) + Number(bucket.outputTokens || 0)
+        + Number(bucket.cacheReadInputTokens || 0) + Number(bucket.cacheCreationInputTokens || 0)
+    }
+    return total
+  }
+
   function modelRows(p) {
     var usageByModel = p ? (p.modelUsage || {}) : {}
     var rows = []
@@ -581,14 +639,17 @@ Panel {
 
           // ---------- Service card ----------
           // One tab per thing you pay for; the strip names the company
-          // (Anthropic, not Claude Code). The card answers two questions
-          // and only those (user decision 2026-09-17): how full the
-          // allowance is, and when it resets. Everything else the record
-          // carries - tier label, token history, app burn - stays in the
-          // record, off the card. Tab names carry their subscription's
-          // status color (see serviceAlarming), so the strip reads as a
-          // status row even before you select. Selecting a tab here never
-          // disturbs the agent card below.
+          // (Anthropic, not Claude Code), most used first (see
+          // subscriptionUseTotals - attributed tokens, with an
+          // account-scoped service's own analytics winning when larger).
+          // The card answers two questions and only those (user decision
+          // 2026-09-17): how full the allowance is, and when it resets.
+          // Everything else the record carries - tier label, token
+          // history, app burn - stays in the record, off the card. Tab
+          // names carry their subscription's status color (see
+          // serviceAlarming), so the strip reads as a status row even
+          // before you select. Selecting a tab here never disturbs the
+          // agent card below.
           BorderSurface {
             visible: root.serviceProviders.length > 0
             width: parent.width
