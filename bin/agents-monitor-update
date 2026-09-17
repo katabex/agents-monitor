@@ -40,7 +40,6 @@ done
 # Stock collectors: claude, codex, fireworks.
 omarchy-agent-usage-update ${flags[@]+"${flags[@]}"} ${only[@]+"${only[@]}"} \
   $(for id in "${!excluded[@]}"; do printf -- '--except %q ' "$id"; done) || true
-
 # Bundled local collectors, by filename convention (see header): same
 # inclusion rules as the stock updater applies to its agents.
 shopt -s nullglob
@@ -66,3 +65,12 @@ for collector in "$script_dir"/omarchy-agent-usage-*; do
   fi
 done
 shopt -u nullglob
+
+# Configuration state is machine truth, not probe output: stamp it after
+# every pass regardless of --except/only filters (an excluded provider's
+# configured-ness did not change because this pass skipped its probe).
+# Covers the stock records (upstream writes no such field) and openrouter
+# (whose collector writes nothing when keyless, so a removed key would
+# otherwise leave a stale record). zai stamps itself: it also runs from
+# its own systemd timer, outside this runner.
+"$script_dir/agents-monitor-config-check" || true

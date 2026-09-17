@@ -18,8 +18,11 @@ Balance is total_credits − total_usage (there is no `remaining` field).
 Key resolution: $OPENROUTER_API_KEY, else {"apiKey": …} in
 ~/.config/omarchy/agents/openrouter.json (the fireworks.json precedent —
 systemd user units do not inherit the shell environment). Without a key
-the record is printed not-ready with help text and nothing is written, so
-a previously collected record is never clobbered by an unconfigured run.
+the record is printed not-ready (`configured` false) with help text and
+nothing is written, so a previously collected record is never clobbered
+by an unconfigured run; the panel hides `configured: false` records
+anyway, and the runner's config-check re-stamps the stale record when
+the key goes away.
 
 Token stats (today, tokens-by-day, tokens-by-model) come from the
 Analytics API - POST /api/v1/analytics/query, which needs a MANAGEMENT
@@ -449,6 +452,11 @@ def scan():
     }
 
     key = api_key()
+    # Machine state, not probe state: stamped on every scan. The keyless
+    # record is printed not-ready and never written, but the runner's
+    # config-check re-stamps this field on the last written record so a
+    # removed key hides the tab instead of leaving stale limits behind.
+    record["configured"] = bool(key)
     if not key:
         record["authHelpText"] = AUTH_HELP
         return record

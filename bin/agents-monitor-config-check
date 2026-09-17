@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Stamp `configured` into subscription records (Agents Monitor).
+
+User rule (2026-09-17): a subscription that is not configured on this
+machine earns no service tab - an unconfigured service has no level or
+reset to show, and its "set your key" remedy is noise for something never
+set up. The panel gate hides records whose `configured` is exactly false
+(absent = unknown = shown, so stock records and synced snapshots from
+older versions never vanish by accident).
+
+Collectors that can run outside the runner (zai's systemd timer) stamp
+the field themselves. This script covers the rest - the stock collectors
+(claude, codex, fireworks), which upstream writes without the field, and
+openrouter, whose collector declines to write at all when keyless, which
+would otherwise leave a stale record claiming a configured subscription
+after the key is removed. `configured` is machine state, not probe
+state: it mirrors each collector's own credential resolution (the same
+files, the same precedence), so a configured-but-failing subscription -
+expired sign-in, dead network - keeps its urgent remedy tab, and only a
+service with no credentials anywhere is hidden.
+
+Usage: agents-monitor-config-check [id ...]
+  Patch only the named ids (claude codex fireworks openrouter); default
+  all four. Reads nothing but credential files; writes records in place
+  via the same atomic write the collectors use.
+"""
+
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+USAGE_DIR = Path(
+    os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+) / "omarchy" / "agents" / "usage"
+
+STOCK_IDS = ("claude", "codex", "fireworks", "openrouter")
+
+
+def expand(path):
+    return Path(os.path.expanduser(str(path)))
+
+
+def read_json(path):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+# ---------------------------------------------------------------- claude
+# Mirrors omarchy-agent-usage-claude's oauth_login: the sign-in this
+# machine knows is claudeAiOauth.accessToken in the config dir's
+# .credentials.json. Expired tokens still count as configured - the
+# record carries the remedy for that.
+
+
+def claude_configured():
+    config_dir = expand(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude")
+    data = read_json(config_dir / ".credentials.json") or {}
+    login = data.get("claudeAiOauth")
+    return bool(isinstance(login, dict) and str(login.get("accessToken") or ""))
+
+
+# ----------------------------------------------------------------- codex
+# The stock collector asks the codex CLI (app-server RPC) - auth is
+# whatever codex itself knows, so configured = the CLI exists and its
+# auth store is present. Tokens or an API key both count.
+
+
+def codex_configured():
+    import shutil
+
+    if not shutil.which("codex"):
+        return False
+    auth = read_json(expand(os.environ.get("CODEX_HOME") or "~/.codex") / "auth.json")
+    return bool(
+        isinstance(auth, dict) and (auth.get("tokens") or auth.get("OPENAI_API_KEY"))
+    )
+
+
+# ------------------------------------------------------------- fireworks
+# Mirrors the stock collector's credentials(): FIREWORKS_API_KEY env,
+# then the auth.ini file (api_key in any section), then opencode's
+# auth.json fireworks-ai key.
+
+
+def fireworks_configured():
+    if os.environ.get("FIREWORKS_API_KEY", "").strip():
+        return True
+
+    auth_ini = expand(os.environ.get("FIREWORKS_AUTH_PATH") or "~/.fireworks/auth.ini")
+    try:
+        import configparser
+
+        parser = configparser.ConfigParser(interpolation=None)
+        parser.read(auth_ini)
+        sections = [parser.defaults()]
+        sections.extend(parser[section] for section in parser.sections())
+        for values in sections:
+            if str(values.get("api_key", values.get("api-key", ""))).strip():
+                return True
+    except Exception:
+        pass
+
+    data_home = expand(os.environ.get("XDG_DATA_HOME") or "~/.local/share")
+    auth = read_json(data_home / "opencode" / "auth.json") or {}
+    entry = auth.get("fireworks-ai")
+    return bool(isinstance(entry, dict) and str(entry.get("key") or "").strip())
+
+
+# ------------------------------------------------------------ openrouter
+# Mirrors the bundled collector's api_key(): env, then the config file.
+
+
+def openrouter_configured():
+    if os.environ.get("OPENROUTER_API_KEY", "").strip():
+        return True
+    config_home = expand(os.environ.get("XDG_CONFIG_HOME") or "~/.config")
+    config = read_json(config_home / "omarchy" / "agents" / "openrouter.json") or {}
+    return bool(str(config.get("apiKey") or "").strip())
+
+
+CHECKS = {
+    "claude": claude_configured,
+    "codex": codex_configured,
+    "fireworks": fireworks_configured,
+    "openrouter": openrouter_configured,
+}
+
+
+def write_record(path, record):
+    """Atomic write, same recipe as the bundled collectors."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(record, handle, separators=(",", ":"))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def main(argv):
+    ids = [arg for arg in argv[1:] if arg in CHECKS] or list(STOCK_IDS)
+    for agent_id in ids:
+        check = CHECKS[agent_id]
+        path = USAGE_DIR / (agent_id + ".json")
+        record = read_json(path)
+        if not isinstance(record, dict):
+            continue  # nothing collected yet: an absent record is already hidden
+        configured = check()
+        if record.get("configured") is configured:
+            continue  # nothing to say; leave the file's mtime alone
+        record["configured"] = configured
+        write_record(path, record)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

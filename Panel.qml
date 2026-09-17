@@ -27,12 +27,17 @@ Panel {
   // local stats), pi and opencode agent-only, and the two cards switch
   // independently. A limits-only record with a dead probe and no rows yet
   // still earns the service tab via the urgent status+help pairing — that
-  // pairing exists to be shown, not to be gated out.
+  // pairing exists to be shown, not to be gated out. A subscription that
+  // is not configured on this machine (configured === false — credentials
+  // absent, per the collectors and the runner's config-check) earns no
+  // tab at all (user decision 2026-09-17): it has no level or reset to
+  // show, and its setup remedy is noise for a service never set up here.
   readonly property var serviceProviders: {
     var rev = providers
     var result = []
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i]
+      if (p.configured === false) continue
       if ((p.limits && p.limits.length > 0) || p.balance
           || (String(p.usageStatusText || "") !== "" && String(p.authHelpText || "") !== ""))
         result.push(p)

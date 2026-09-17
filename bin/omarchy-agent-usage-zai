@@ -23,12 +23,15 @@ stays empty — this collector counts nothing, it only meters. The probe is
 fail-soft (10 s timeout, single attempt, last good payload cached in
 XDG_CACHE_HOME/omarchy/agent-usage/zai-quota.json and reused while its
 windows are still open) so a dead network degrades to the cache, not a
-blank tab. Quota is account-level, not gated behind any local store: even
-with no key at all the record is still written (`ready` stays true) with
-the failure pairing (usageStatusText + authHelpText) so the tab shows the
-remedy instead of vanishing. Unknown row types (V3 points-based plans may
-send CREDIT_LIMIT and friends) are skipped, never fatal. --quota-debug
-prints the raw payload to stderr.
+blank tab. `configured` mirrors key resolution (this collector also runs
+from its own systemd timer, outside the runner, so it must stamp the
+field itself): with no key at all the record is still written (`ready`
+stays true, `configured` false) - the panel hides a subscription that
+was never set up on this machine, so the keyless failure pairing is a
+debugging artifact, not a nag tab. A key that exists but cannot reach
+the API keeps its urgent remedy tab. Unknown row types (V3 points-based
+plans may send CREDIT_LIMIT and friends) are skipped, never fatal.
+--quota-debug prints the raw payload to stderr.
 """
 
 import json
@@ -195,12 +198,11 @@ def write_cached_payload(payload, now):
         pass  # cache is an optimization, never a requirement
 
 
-def zai_quota(now):
+def zai_quota(now, key):
     """(rows, level, status_text, help_text) for the record; never raises.
     Failures surface in authHelpText (the panel's urgent red box shows that,
     and the hero falls back to the tier label) — usageStatusText stays the
     informational line."""
-    key = zai_api_key()
     payload = None
     source = ""
     if key:
@@ -230,13 +232,17 @@ def zai_quota(now):
 
 def scan():
     now = datetime.now(timezone.utc)
-    rows, level, text, help_text = zai_quota(now)
+    key = zai_api_key()
+    rows, level, text, help_text = zai_quota(now, key)
     return {
         "schemaVersion": 1,
         "id": "zai",
         "name": "Z.ai",
         "updatedAt": now.isoformat(),
         "ready": True,
+        # Machine state, not probe state: a key that exists but cannot
+        # reach the API is still a configured subscription.
+        "configured": bool(key),
         "hasLocalStats": False,
         "tierLabel": ("GLM " + level.capitalize()) if level else "",
         "limits": rows,

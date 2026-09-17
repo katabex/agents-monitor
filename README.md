@@ -46,7 +46,13 @@ no token history — account-scoped day/model charts and the OpenRouter
 CREDIT BURN BY APP column are no longer rendered on the service card
 (the collectors keep collecting; the data stays in the records). The
 urgent status box survives — a failed probe has no level to show, and
-its remedy is why the tab exists.
+its remedy is why the tab exists. One gate ahead of all of that: a
+subscription not configured on this machine (record `configured: false`
+— credentials absent, stamped by the collectors and the runner's
+config-check) earns no tab at all (user decision 2026-09-17): configure
+it and the tab appears on the next refresh. Configured-but-failing
+(expired sign-in, dead network) keeps its urgent tab — claude's expired
+sign-in shows stale limits plus the remedy, not vanishing.
 
 The subscription card's header carries the
 selected service's mark, and the agent card's usage title leads with the
@@ -148,9 +154,19 @@ was reduced to level + reset.
   `usage/zai.json` — no local store, no stats buckets. Fail-soft (10 s
   timeout, single attempt, cached payload reused while its windows are
   open), unknown row types skipped, `--quota-debug` prints the raw
-  payload. Quota is account-level, not gated behind a key: even with none
-  configured the record still writes, with the remedy in
-  `authHelpText` so the tab shows why instead of disappearing
+  payload. Stamps `configured` from key presence itself (its systemd
+  timer runs outside the runner): no key at all → `configured: false`, a
+  record the panel hides (never configured here); a key that cannot
+  reach the API keeps the failure pairing and its urgent remedy tab
+- `bin/agents-monitor-config-check` — not a collector (the name sits
+  outside the `omarchy-agent-usage-*` glob on purpose): stamps
+  `configured` (machine-local credential presence, mirroring each
+  collector's own key resolution) into the stock records — which upstream
+  writes without the field — and into `openrouter.json`, whose collector
+  writes nothing when keyless, so a removed key would otherwise leave a
+  stale record claiming a live subscription. The runner calls it after
+  every pass, filters or not; the panel hides `configured === false`
+  subscriptions (absent = unknown = shown)
 - `bin/omarchy-agent-usage-openrouter` — Python collector; balance meter
   from OpenRouter's official credits/auth-key endpoints, plus token stats
   (today / by day / by model) from the Analytics API. Keys: balance needs

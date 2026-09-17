@@ -263,6 +263,10 @@ Item {
       providerId: String(record.id),
       providerName: String(record.name || record.id),
       ready: record.ready === true || synced,
+      // Machine-local configuration state (false = no credentials on this
+      // machine; absent = unknown, treated as configured so stock records
+      // and old synced snapshots never vanish). Never travels in sync.
+      configured: record.configured !== false,
       usageStatusText: String(record.usageStatusText || ""),
       authHelpText: String(record.authHelpText || ""),
 
