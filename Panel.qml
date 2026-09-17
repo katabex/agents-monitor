@@ -55,14 +55,13 @@ Panel {
       var has = false
       for (var d = 0; d < days.length; d++)
         if (Number(days[d].messageCount) > 0) { has = true; break }
-      if (!has) {
-        var usageModels = p.modelUsage || {}
-        for (var k in usageModels) { has = true; break }
-      }
-      // A tab is earned by renderable token data (day chart or model
-      // rows), not by bare activity: activity-only records — discovery
-      // MVPs, copilot's token-less store — stay in the usage dir but out
-      // of the strip until they carry numbers worth charting.
+      // A tab is earned by use in the last 7 days (user decision
+      // 2026-09-17): recentDays is exactly that window, so an admitted
+      // tab's day chart always has at least one live bar. All-time model
+      // rows alone no longer admit an agent - a tool idle for a week
+      // leaves the strip (its record stays in the usage dir; the first
+      // token it burns brings the tab back), and activity-only records
+      // (discovery MVPs, copilot's token-less store) stay out too.
       if (has) result.push(p)
     }
     return result

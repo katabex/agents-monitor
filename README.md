@@ -27,15 +27,16 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it), plus a CREDIT BURN BY APP breakdown on the service card (`app` dimension, same management key) |
 | **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) lands on the OpenAI service tab in PER SUBSCRIPTION |
 | **copilot** | — (activity only: copilot 1.0.83 persists no token counts — `session-store.db`'s `assistant_usage_events` is empty, upgrade path documented in the collector) | `~/.copilot/session-store.db` (SQLite, read-only) — prompts are turns with a user message, sessions are sessions that ran a turn, day buckets from turn timestamps; no token claims, so charts stay hidden rather than lie |
-| **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Tabs are earned by renderable token data — activity-only records stay maintained in the usage dir but out of the strip until a parser fills token buckets. Also writes its own `discovery.json` every run, carrying `installedUnused` — catalog agents installed here but never used and owned by no collector — which the AGENT card shows as a dim footer line instead of a tab |
+| **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Agent tabs are earned by use in the last 7 days — activity-only records (and agents idle for a week) stay maintained in the usage dir but out of the strip. Also writes its own `discovery.json` every run, carrying `installedUnused` — catalog agents installed here but never used and owned by no collector — which the AGENT card shows as a dim footer line instead of a tab |
 
 Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The QML
 divergences: the panel content is a two-card, two-strip design — a
 SUBSCRIPTION card (one tab per thing you pay for, named by company:
 Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks) and an AGENT card (one tab
-per thing that runs: Claude Code, Codex, OpenCode, pi, Hermes —
-account-scoped providers are services, never agents), each
+per thing that ran in the last 7 days: Claude Code, Codex, OpenCode, pi,
+Hermes — an agent idle for a week leaves the strip until its next token
+(account-scoped providers are services, never agents), each
 switching independently. The subscription card answers exactly two
 questions and only those (user decision 2026-09-17): how full the
 allowance is, and when it resets — one row per limit window (title,
