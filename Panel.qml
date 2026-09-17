@@ -105,7 +105,6 @@ Panel {
 
   readonly property var limits: limitWindows(service)
   readonly property var models: modelRows(agent)
-  readonly property var headline: bindingWindow(service)
   readonly property var balance: service ? (service.balance || null) : null
   // A prepaid account runs low the way a subscription window fills up: the
   // last 10% of the funded credits lights the same alarm.
@@ -225,17 +224,6 @@ Panel {
     return out
   }
 
-  // The window that decides how much room is left — the fullest one, since
-  // that is what stops the next prompt.
-  function bindingWindow(p) {
-    var windows = limitWindows(p)
-    var best = null
-    for (var i = 0; i < windows.length; i++) {
-      if (!best || windows[i].percent > best.percent) best = windows[i]
-    }
-    return best
-  }
-
   function resetMsFor(w) {
     if (!w || w.resetAt === "") return -1
     var ms = new Date(w.resetAt).getTime()
@@ -271,24 +259,7 @@ Panel {
     return currencyPrefix(currency) + amount.toFixed(2)
   }
 
-  function balanceDetailText(b) {
-    if (!b || !(b.funded > 0)) return ""
-    var text = formatMoney(b.spent, b.currency) + " spent of " + formatMoney(b.funded, b.currency) + " funded"
-    if (b.estimated) text += " · estimated"
-    return text
-  }
-
   // ---------------------------------------------------------------- content
-
-  // The plan you pay for, under the name of the tool it pays for. Limits live
-  // in their own section; the hero just says what this is.
-  function heroMeta(p) {
-    if (!p) return ""
-    if (String(p.usageStatusText || "") !== "") return p.usageStatusText
-    var tier = String(p.tierLabel || "")
-    if (tier === "") return "Subscription"
-    return tier.charAt(0).toUpperCase() + tier.slice(1)
-  }
 
   // The usage charts tell different truths per provider: account-wide
   // analytics (openrouter, fireworks — scope "account") vs machine-local
@@ -407,35 +378,6 @@ Panel {
     }
     rows.sort(function(a, b) { return b.total - a.total })
     return rows.slice(0, 4)
-  }
-
-  // Which tools burned this service's credits, heaviest first — the
-  // inverse of subscriptionRows: one subscription, many apps. Buckets
-  // carry modelUsage's shape (plus an ignored "spend" field) so rows and
-  // tooltips render identically; the app name is whatever the collector's
-  // own detection returned, unmapped.
-  function appRows(p) {
-    var usageByApp = p ? (p.appUsage || {}) : {}
-    var rows = []
-    for (var id in usageByApp) {
-      var bucket = usageByApp[id] || {}
-      var input = Number(bucket.inputTokens || 0)
-      var output = Number(bucket.outputTokens || 0)
-      var cacheRead = Number(bucket.cacheReadInputTokens || 0)
-      var cacheWrite = Number(bucket.cacheCreationInputTokens || 0)
-      var total = input + output + cacheRead + cacheWrite
-      if (total > 0)
-        rows.push({
-          name: String(id),
-          total: total,
-          input: input,
-          output: output,
-          cacheRead: cacheRead,
-          cacheWrite: cacheWrite
-        })
-    }
-    rows.sort(function(a, b) { return b.total - a.total })
-    return rows
   }
 
   function modelTooltip(row) {
@@ -635,11 +577,14 @@ Panel {
 
           // ---------- Service card ----------
           // One tab per thing you pay for; the strip names the company
-          // (Anthropic, not Claude Code). Balance and limit meters are the
-          // account's state — the same truth on every machine. Tab names
-          // carry their subscription's status color (see serviceAlarming),
-          // so the strip reads as a status row even before you select.
-          // Selecting a tab here never disturbs the agent card below.
+          // (Anthropic, not Claude Code). The card answers two questions
+          // and only those (user decision 2026-09-17): how full the
+          // allowance is, and when it resets. Everything else the record
+          // carries - tier label, token history, app burn - stays in the
+          // record, off the card. Tab names carry their subscription's
+          // status color (see serviceAlarming), so the strip reads as a
+          // status row even before you select. Selecting a tab here never
+          // disturbs the agent card below.
           BorderSurface {
             visible: root.serviceProviders.length > 0
             width: parent.width
@@ -754,89 +699,62 @@ Panel {
                 }
               }
 
-              Text {
-                width: parent.width
-                visible: text !== ""
-                textFormat: Text.PlainText
-                text: root.heroMeta(root.service)
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
-
+              // ---------- Usage level ----------
+              // The card's entire content: one row per limit window - how
+              // full it is, and when it resets. A prepaid balance is the
+              // same answer in money (how much is left; it never resets,
+              // so it gets no reset line). No section headers: with only
+              // one grammar left, the rows speak for themselves.
               Column {
-                id: balanceSection
-                visible: !!root.balance
+                id: levelSection
+                visible: !!root.balance || root.limits.length > 0
                 width: parent.width
-                spacing: Style.space(10)
+                spacing: Style.space(12)
 
-                // The meter shows what is left, not what is used: a prepaid
-                // account drains toward empty rather than filling toward a cap.
-                readonly property real ratio: root.balance && root.balance.funded > 0
-                  ? root.clamp(root.balance.remaining / root.balance.funded, 0, 1)
-                  : -1
-
-                PanelSectionHeader {
+                Column {
+                  id: balanceRow
+                  visible: !!root.balance
                   width: parent.width
-                  text: "BALANCE"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                }
+                  spacing: Style.space(6)
 
-                Item {
-                  width: parent.width
-                  implicitHeight: Math.max(balanceLabel.implicitHeight, balanceValue.implicitHeight)
+                  // The meter shows what is left, not what is used: a prepaid
+                  // account drains toward empty rather than filling toward a cap.
+                  readonly property real ratio: root.balance && root.balance.funded > 0
+                    ? root.clamp(root.balance.remaining / root.balance.funded, 0, 1)
+                    : -1
 
-                  Text {
-                    id: balanceLabel
-                    text: "Prepaid credits"
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.body
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
+                  Item {
+                    width: parent.width
+                    implicitHeight: Math.max(balanceLabel.implicitHeight, balanceValue.implicitHeight)
+
+                    Text {
+                      id: balanceLabel
+                      text: "Prepaid credits"
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                      anchors.left: parent.left
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                      id: balanceValue
+                      textFormat: Text.PlainText
+                      text: root.balance ? root.formatMoney(root.balance.remaining, root.balance.currency) : ""
+                      color: root.balanceAlarming ? root.urgent : root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      anchors.right: parent.right
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
                   }
 
-                  Text {
-                    id: balanceValue
-                    textFormat: Text.PlainText
-                    text: root.balance ? root.formatMoney(root.balance.remaining, root.balance.currency) : ""
-                    color: root.balanceAlarming ? root.urgent : root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
+                  Meter {
+                    visible: balanceRow.ratio >= 0
+                    width: parent.width
+                    value: balanceRow.ratio
+                    alarming: root.balanceAlarming
                   }
-                }
-
-                Meter {
-                  visible: balanceSection.ratio >= 0
-                  width: parent.width
-                  value: balanceSection.ratio
-                  alarming: root.balanceAlarming
-                }
-
-                Text {
-                  textFormat: Text.PlainText
-                  visible: text !== ""
-                  width: parent.width
-                  text: root.balanceDetailText(root.balance)
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
-              }
-
-              Column {
-                id: limitsSection
-                visible: root.limits.length > 0
-                width: parent.width
-                spacing: Style.space(10)
-
-                PanelSectionHeader {
-                  text: "LIMITS"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
                 }
 
                 Repeater {
@@ -844,50 +762,8 @@ Panel {
 
                   LimitRow {
                     required property var modelData
-                    width: limitsSection.width
+                    width: levelSection.width
                     window: modelData
-                  }
-                }
-              }
-
-              // Account-scoped services (OpenRouter, Fireworks) burn
-              // credits per request: their day/model charts are
-              // subscription data and live here, under the service's own
-              // scope title.
-              UsageCharts {
-                visible: String(root.service ? root.service.scope : "") === "account"
-                p: root.service
-                sectionTitle: root.usageGroupTitle(root.service)
-              }
-
-              // ---------- Credit burn by app ----------
-              // The inverse of the agent card's PER SUBSCRIPTION: one
-              // subscription (OpenRouter today), many tools burning it.
-              // Earned by data like every other section here — only a
-              // record that actually carries appUsage grows this column.
-              Column {
-                id: appBurnSection
-                visible: appRows.length > 0
-                width: parent.width
-                spacing: Style.spacing.md
-
-                readonly property var appRows: root.appRows(root.service)
-
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "CREDIT BURN BY APP"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                }
-
-                Repeater {
-                  model: appBurnSection.appRows
-
-                  ModelRow {
-                    required property var modelData
-                    width: appBurnSection.width
-                    row: modelData
-                    share: modelData.total / Math.max(1, appBurnSection.appRows[0].total)
                   }
                 }
               }

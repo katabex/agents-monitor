@@ -33,25 +33,29 @@ Everything else — the per-day and per-model charts, cross-device
 sync, settings schema — is the stock widget, unchanged. The QML
 divergences: the panel content is a two-card, two-strip design — a
 SUBSCRIPTION card (one tab per thing you pay for, named by company:
-Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks — balance + limit meters)
-and an AGENT card (one tab per thing that runs: Claude Code, Codex,
-OpenCode, pi, Hermes — account-scoped providers are services, never
-agents), each
-switching independently. The subscription card's header carries the
+Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks) and an AGENT card (one tab
+per thing that runs: Claude Code, Codex, OpenCode, pi, Hermes —
+account-scoped providers are services, never agents), each
+switching independently. The subscription card answers exactly two
+questions and only those (user decision 2026-09-17): how full the
+allowance is, and when it resets — one row per limit window (title,
+percent, meter, reset countdown), plus a prepaid-balance row (money
+left + meter; balances never reset) when a record carries a `balance`.
+Everything else the records know stays off the card: no tier line, and
+no token history — account-scoped day/model charts and the OpenRouter
+CREDIT BURN BY APP column are no longer rendered on the service card
+(the collectors keep collecting; the data stays in the records). The
+urgent status box survives — a failed probe has no level to show, and
+its remedy is why the tab exists.
+
+The subscription card's header carries the
 selected service's mark, and the agent card's usage title leads with the
 selected agent's mark (`ProviderMark`, shared); the Z.ai tab is its own
 record (`bin/omarchy-agent-usage-zai`), limits-only, so it carries Z.ai's
 own mark (traced from the official logo) and shows up service-only even
 with no local OpenCode activity at all — a dead probe and no key still
 write the record, with the remedy in its urgent status box, so the tab
-never silently vanishes. Account-scoped services (OpenRouter, Fireworks) carry
-their day/model charts inside the service card under `USAGE — ACCOUNT` —
-their tokens are credit burn, subscription data. A record that also
-carries `appUsage` (OpenRouter today) grows a further CREDIT BURN BY APP
-column below that, reusing the same `ModelRow` share-bar component as
-PER SUBSCRIPTION on the agent card — the inverse mirror: one subscription,
-many tools, instead of one tool, many subscriptions; empty or absent
-`appUsage` just leaves the column out. Below PER SUBSCRIPTION, the agent
+never silently vanishes. Below the agent card's PER SUBSCRIPTION, the agent
 card also carries a dim, card-level footer line — "Installed, never used
 here: Gemini · Crush · Muse Code" — sourced from the discovery record's
 `installedUnused` regardless of which agent tab is selected (machine
@@ -116,13 +120,13 @@ SUBSCRIPTION section under TOKENS BY MODEL:
   e.g. GLM via z.ai's Anthropic-compat endpoint shows under Anthropic)
 
 OpenRouter/Fireworks tabs carry no PER SUBSCRIPTION section themselves —
-their charts are already account-wide analytics, one subscription by
-definition. OpenRouter carries the mirror view instead, CREDIT BURN BY
-APP (see above): which tool spent the one subscription's credits, rather
-than which subscription a tool's tokens burned. Fireworks has no `app`
-analogue (no comparable dimension in its usage API) and stays
-totals-only. Attribution is billing-accurate but session-static, and
-(PER SUBSCRIPTION) counts only this machine.
+their usage is account-wide analytics, one subscription by definition.
+Fireworks has no `app` analogue (no comparable dimension in its usage API)
+and stays totals-only. Attribution is billing-accurate but session-static,
+and (PER SUBSCRIPTION) counts only this machine. OpenRouter's per-app
+breakdown still lands in its record's `appUsage` (see `omarchy-agent-usage-openrouter`)
+but no longer renders anywhere after the service card
+was reduced to level + reset.
 
 ## How bundled collection works
 
