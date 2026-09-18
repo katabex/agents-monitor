@@ -725,6 +725,26 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) { if (t === "r" || t === "R") root.refreshNow() }
 
+      // A visible close affordance alongside the existing Escape/
+      // click-outside dismiss paths - fixed to the panel corner, above
+      // the Flickable, so it never scrolls away with the content.
+      PanelActionButton {
+        id: closeButton
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: Style.space(6)
+        z: 10
+        iconText: "\u2715"
+        tooltipText: "Close"
+        foreground: root.dim
+        hoverColor: root.urgent
+        fontFamily: root.fontFamily
+        fontSize: Style.font.caption
+        size: Style.space(22)
+        onClicked: root.close()
+        onHovered: function(isHovered) { if (isHovered) root.cursorActive = true }
+      }
+
       Flickable {
         id: panelFlick
         anchors.fill: parent

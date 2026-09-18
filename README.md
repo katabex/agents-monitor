@@ -128,7 +128,10 @@ when a record sets both `usageStatusText` and `authHelpText` (stock
 collectors leave a stale help text on healthy records, so help alone
 would nag); empty cards collapse out; keyboard: left/right cycles the
 focused card, up/down scrolls and hands focus between cards at the scroll
-edges.
+edges. A `PanelActionButton` ✕ sits fixed in the panel's top-right
+corner, above the Flickable so it never scrolls away, alongside the
+existing Escape/click-outside dismiss paths (`root.close()`, same call
+both ways).
 
 ## Install
 
