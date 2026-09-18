@@ -25,7 +25,7 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | **opencode** | — (local stats only) | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
 | **zai** | GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | — (account-level quota, no local store of its own) |
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it), plus a CREDIT BURN BY APP breakdown on the service card (`app` dimension, same management key) |
-| **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) shows up on the OpenAI service tab's use-ranking and in the USAGE — BY SUBSCRIPTION card |
+| **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) shows up on the OpenAI service tab's use-ranking and in the USAGE — BY SUBSCRIPTION AND MODEL card |
 | **copilot** | — (activity only: copilot 1.0.83 persists no token counts — `session-store.db`'s `assistant_usage_events` is empty, upgrade path documented in the collector) | `~/.copilot/session-store.db` (SQLite, read-only) — prompts are turns with a user message, sessions are sessions that ran a turn, day buckets from turn timestamps; no token claims, so charts stay hidden rather than lie |
 | **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Agent tabs are earned by use in the last 7 days — activity-only records (and agents idle for a week) stay maintained in the usage dir but out of the strip. Also writes its own `discovery.json` every run, carrying `installedUnused` — catalog agents installed here but never used and owned by no collector — which the AGENT card shows as a dim footer line instead of a tab |
 
@@ -38,7 +38,7 @@ OpenRouter, Fireworks), a USAGE — BY AGENT card (one tab per thing that
 ran in the last 7 days: Claude Code, Codex, OpenCode, pi, Hermes — an
 agent idle for a week leaves the strip until its next token; account-
 scoped providers are services, never agents), and a USAGE — BY
-SUBSCRIPTION card with no tabs of its own — it never changes when
+SUBSCRIPTION AND MODEL card with no tabs of its own — it never changes when
 either strip above it does. The two tab strips switch independently.
 Both are ordered by use, most used
 first (user decision 2026-09-17). The agent strip ranks by the same
@@ -46,7 +46,7 @@ first (user decision 2026-09-17). The agent strip ranks by the same
 disagrees with the day chart it selects into. The subscription strip
 ranks by each subscription's total use: the larger of its agents'
 attributed token total (`subscriptionUsage`, summed across agents -
-the same numbers the USAGE — BY SUBSCRIPTION card sums globally) and
+the same numbers the USAGE — BY SUBSCRIPTION AND MODEL card sums globally) and
 its own record's
 all-time token total (authoritative account analytics for
 OpenRouter/Fireworks; identical to the attribution for claude/codex by
@@ -113,10 +113,12 @@ exactly when you select the tab). Strips size tabs to
 their name text and grow the panel to keep one row; subscription tab
 names wear their subscription's status color — urgent when a limit
 window is ≥ 90% spent, the prepaid balance is ≤ 10% left, or the probe
-failed (the same `serviceAlarming` word the bar icon speaks); the usage
-title names
-whose truth the charts tell (`USAGE — ACCOUNT` vs
-`USAGE — THIS MACHINE` vs `— N DEVICES`); the urgent status box shows only
+failed (the same `serviceAlarming` word the bar icon speaks); the USAGE
+— BY AGENT card's title is `USAGE — BY AGENT`, or `USAGE — BY AGENT ·
+N DEVICES` for a synced multi-device merge (renamed from the old
+scope-describing `USAGE — THIS MACHINE` / `USAGE — ACCOUNT` titles,
+user decision 2026-09-18 - the account variant was dead code anyway,
+since agentProviders excludes account-scoped services); the urgent status box shows only
 when a record sets both `usageStatusText` and `authHelpText` (stock
 collectors leave a stale help text on healthy records, so help alone
 would nag); empty cards collapse out; keyboard: left/right cycles the
@@ -154,7 +156,7 @@ it - `subscriptionUsage` / `recentSubscriptionUsage` in the record
 contract - even though no agent tab renders that breakdown on its own
 card anymore (removed 2026-09-18, see above). The data now surfaces two
 places: the subscription strip's use-based ranking (all-time, see
-above) and the USAGE — BY SUBSCRIPTION card's BY SUBSCRIPTION section
+above) and the USAGE — BY SUBSCRIPTION AND MODEL card's BY SUBSCRIPTION section
 (7-day, summed across every tool). The mapping itself is unchanged:
 
 - **pi** — buckets each counted message by its session provider

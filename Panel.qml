@@ -287,17 +287,15 @@ Panel {
 
   // ---------------------------------------------------------------- content
 
-  // The usage charts tell different truths per provider: account-wide
-  // analytics (openrouter, fireworks — scope "account") vs machine-local
-  // session stats (everything else). The group title says which one the
-  // numbers are; a synced setup merges device stats into one total.
+  // The by-agent card's title. Scope's other branch (account-wide
+  // analytics for openrouter/fireworks) is structurally unreachable here
+  // - agentProviders excludes scope "account" - so this only ever
+  // distinguishes a synced multi-device merge from a single machine.
   function usageGroupTitle(p) {
     if (!p) return ""
-    if (String(p.scope || "") === "account")
-      return "USAGE — ACCOUNT"
     if (p.syncEnabled && Number(p.syncDeviceCount || 0) > 1)
-      return "USAGE — " + Number(p.syncDeviceCount) + " DEVICES"
-    return "USAGE — THIS MACHINE"
+      return "USAGE — BY AGENT · " + Number(p.syncDeviceCount) + " DEVICES"
+    return "USAGE — BY AGENT"
   }
 
   // Local calendar date, recomputed from nowMs so a panel left open across
@@ -1091,7 +1089,7 @@ Panel {
 
               Text {
                 textFormat: Text.PlainText
-                text: "USAGE — BY SUBSCRIPTION"
+                text: "USAGE — BY SUBSCRIPTION AND MODEL"
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
