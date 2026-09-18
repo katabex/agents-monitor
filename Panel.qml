@@ -1096,33 +1096,6 @@ Panel {
               }
 
               Column {
-                id: globalModelSection
-                visible: rows.length > 0
-                width: parent.width
-                spacing: Style.spacing.md
-
-                readonly property var rows: root.globalModelRows()
-
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "BY MODEL"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                }
-
-                Repeater {
-                  model: globalModelSection.rows
-
-                  ModelRow {
-                    required property var modelData
-                    width: globalModelSection.width
-                    row: modelData
-                    share: modelData.total / Math.max(1, globalModelSection.rows[0].total)
-                  }
-                }
-              }
-
-              Column {
                 id: globalSubSection
                 visible: rows.length > 0
                 width: parent.width
@@ -1145,6 +1118,33 @@ Panel {
                     width: globalSubSection.width
                     row: modelData
                     share: modelData.total / Math.max(1, globalSubSection.rows[0].total)
+                  }
+                }
+              }
+
+              Column {
+                id: globalModelSection
+                visible: rows.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var rows: root.globalModelRows()
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "BY MODEL"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: globalModelSection.rows
+
+                  ModelRow {
+                    required property var modelData
+                    width: globalModelSection.width
+                    row: modelData
+                    share: modelData.total / Math.max(1, globalModelSection.rows[0].total)
                   }
                 }
               }
