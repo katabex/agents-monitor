@@ -1,25 +1,17 @@
-# Agents Monitor
+# Agents Monitor for Omarchy
 
-An [Omarchy](https://omarchy.org) shell plugin: **Claude Code, Codex, Fireworks, pi, OpenCode, Z.ai, and OpenRouter** usage, limits, and pace in one bar panel.
-
-Fork of the stock `omarchy.agents` widget (MIT) with built-in **pi agent**, **OpenCode**, **Z.ai**, and **OpenRouter** collection — providers the stock panel does not show.
+An [Omarchy](https://omarchy.org) shell plugin showing usage per subscription and agent.
 When installed it replaces the stock widget on the bar.
 
 ![Agents Monitor panel](screenshots/panel.png)
 
-*The three-card layout: SUBSCRIPTION (level and reset countdown for whichever service you pick), USAGE — BY AGENT (the last 7 days for whichever tool you pick), and USAGE — BY SUBSCRIPTION AND MODEL (cumulative across every tool, always visible).
-Numbers above are randomized for the screenshot — the layout and features are real.*
-
 ## What it shows
 
-- **SUBSCRIPTION** — one tab per thing you pay for (Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks), ordered by how much you actually use each one.
+- **SUBSCRIPTION** — one tab per subscription (Anthropic, OpenAI, Z.ai, OpenRouter, Fireworks), ordered by how much you actually use each one.
   Each tab shows how full your allowance is and when it resets, or a prepaid balance if the service is pay-as-you-go.
   A subscription you haven't configured on this machine simply doesn't get a tab.
 - **USAGE — BY AGENT** — one tab per coding tool that ran in the last 7 days (Claude Code, Codex, OpenCode, pi, Hermes), ordered by use, with a day-by-day chart of its tokens this week.
 - **USAGE — BY SUBSCRIPTION AND MODEL** — a running total, independent of which tab is selected above: this week's usage summed by subscription and by model, across every tool at once.
-
-Click a tab or use the arrow keys to switch.
-The ✕ in the top-right corner (or Escape, or clicking outside) closes the panel.
 
 ## Providers and setup
 
