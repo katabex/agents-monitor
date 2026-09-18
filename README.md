@@ -10,8 +10,11 @@ panel does not show. When installed it replaces the stock widget on the bar.
 
 ![Agents Monitor panel](screenshots/panel.png)
 
-*The panel with the Z.ai subscription selected (quota meters) and the
-Claude Code agent below (day/model charts, per-subscription attribution).*
+*The three-card layout: SUBSCRIPTION (Anthropic selected, level and reset
+countdown only), USAGE — BY AGENT (Claude Code selected, the last 7 days),
+and USAGE — BY SUBSCRIPTION AND MODEL (cumulative across every tool).
+Numbers are randomized for this screenshot — the layout and features are
+real.*
 
 
 ## What it adds over stock
