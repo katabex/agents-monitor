@@ -176,9 +176,15 @@ was reduced to level + reset.
   records after every runner pass (limits-only included; sub-second
   local scan). Mirrors the stock collectors' own message extraction
   line for line over the very stores they read (~/.claude/projects,
-  ~/.codex sessions, pi/omp sessions and the opencode db for openai
-  burn) with a 7-day local-day filter, and cross-checks its sums
-  against the record's own recentDays (mismatches print to stderr).
+  ~/.codex sessions, and - for both - the pi/omp session files and the
+  opencode db rows that ran on their provider (anthropic for claude,
+  openai-codex/openai for codex), since a pi or opencode session can
+  burn either subscription without ever writing that agent's own
+  transcript and the stock collectors already count it there) with a
+  7-day local-day filter, and cross-checks its sums against the
+  record's own recentDays (mismatches print to stderr - this is how a
+  first cut that only scanned claude's native transcripts got caught
+  undercounting a pi session on the anthropic provider, v0.9.1).
   The panel synthesizes claude/codex recent PER SUBSCRIPTION
   attribution from it, exactly as it synthesizes the all-time side
 - `bin/agents-monitor-config-check` — not a collector (the name sits

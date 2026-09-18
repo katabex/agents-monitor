@@ -11,7 +11,16 @@ mapping, same dedupe) and keeping only entries whose local day falls in
 the recentDays window (today-6 .. today). The all-time fields the stock
 collector writes are left untouched.
 
-claude  ~/.claude/projects/**/*.jsonl assistant entries
+claude  ~/.claude/projects/**/*.jsonl assistant entries, plus pi/omp
+        session files and opencode's db rows that ran on the anthropic
+        provider - a pi session burns the Claude subscription without
+        ever writing a native Claude Code transcript, and the stock
+        claude collector's scan_pi_usage()/scan_opencode_usage() merge
+        exactly that into its all-time stats, so the 7-day mirror must
+        cover the same three sources or it undercounts (caught live
+        2026-09-18: this very session runs pi on the anthropic
+        provider, and the first cut of this script only scanned
+        ~/.claude/projects - the cross-check below is what caught it).
 codex   ~/.codex/{sessions,archived_sessions} rollouts (token_count),
         plus pi/omp session files and opencode's db rows that ran on
         openai-codex/openai - the stock codex collector counts those
@@ -117,7 +126,8 @@ def json_lines(path):
 # ---------------------------------------------------------------- claude
 
 
-def scan_claude(window):
+def scan_claude_projects(window):
+    """Native Claude Code CLI transcripts under ~/.claude/projects."""
     config_dir = Path(
         os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
     ).expanduser()
@@ -163,6 +173,118 @@ def scan_claude(window):
             model = str(message.get("model") or entry.get("model") or "claude")
             add_tokens(by_model.setdefault(model, empty_bucket()),
                        input_t, output_t, read_t, write_t)
+    return by_model
+
+
+def scan_claude_pi(window):
+    """pi/omp session messages that ran on the anthropic provider - the
+    stock collector's scan_pi_usage() merges these into claude.json's
+    all-time stats (a pi session burns the Claude subscription without
+    ever writing a native Claude Code transcript). Same pre-filter, same
+    provider match, same dedupe key, same usage-key precedence."""
+    by_model = {}
+    seen = set()
+    for root in (Path.home() / ".pi" / "agent" / "sessions",
+                 Path.home() / ".omp" / "agent" / "sessions"):
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.jsonl"):
+            for line_number, line in enumerate(json_lines(path), 1):
+                if '"usage"' not in line or '"assistant"' not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                message = entry.get("message") if isinstance(entry.get("message"), dict) else {}
+                if entry.get("type") != "message" or message.get("role") != "assistant":
+                    continue
+                if str(message.get("provider") or "") != "anthropic":
+                    continue
+                unique_key = f"{path}:{entry.get('id') or line_number}"
+                if unique_key in seen:
+                    continue
+                seen.add(unique_key)
+                usage = message.get("usage") or {}
+
+                def token(snake, camel):
+                    return number(usage.get(snake, usage.get(camel, 0)))
+
+                input_t = token("input", "inputTokens")
+                output_t = token("output", "outputTokens")
+                read_t = token("cacheRead", "cache_read_input_tokens")
+                write_t = token("cacheWrite", "cache_creation_input_tokens")
+                total = input_t + output_t + read_t + write_t
+                if total <= 0:
+                    total = number(usage.get("totalTokens"))
+                    input_t = total
+                if total <= 0:
+                    continue
+                day = local_day(entry.get("timestamp") or message.get("timestamp"))
+                if day not in window:
+                    continue
+                model = str(message.get("model") or "claude")
+                add_tokens(by_model.setdefault(model, empty_bucket()),
+                           input_t, output_t, read_t, write_t)
+    return by_model
+
+
+def scan_claude_opencode(window):
+    """opencode db rows that ran on provider anthropic - the stock
+    collector's scan_opencode_usage() merges these the same way."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    db = Path(
+        os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local/share")
+    ).expanduser() / "opencode" / "opencode.db"
+    by_model = {}
+    if not db.is_file():
+        return by_model
+    try:
+        conn = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
+    except sqlite3.Error:
+        return by_model
+    try:
+        conn.execute("PRAGMA query_only = ON")
+        for _session_id, raw in conn.execute("SELECT session_id, data FROM message"):
+            try:
+                entry = json.loads(raw)
+                if not isinstance(entry, dict) or entry.get("role") != "assistant":
+                    continue
+                if str(entry.get("providerID") or "") != "anthropic":
+                    continue
+                tokens = entry.get("tokens") or {}
+                cache = tokens.get("cache") or {}
+                input_t = number(tokens.get("input"))
+                output_t = number(tokens.get("output")) + number(tokens.get("reasoning"))
+                read_t = number(cache.get("read"))
+                write_t = number(cache.get("write"))
+                if not (input_t or output_t or read_t or write_t):
+                    continue
+                created = number((entry.get("time") or {}).get("created"))
+                # Stock falls back to today when the message carries no
+                # timestamp, same as here.
+                day = local_day(created / 1000) if created > 0 else today
+                if day not in window:
+                    continue
+                model = str(entry.get("modelID") or "claude").rstrip("/").split("/")[-1]
+            except Exception:
+                continue
+            add_tokens(by_model.setdefault(model, empty_bucket()),
+                       input_t, output_t, read_t, write_t)
+    except sqlite3.Error:
+        pass
+    finally:
+        conn.close()
+    return by_model
+
+
+def scan_claude(window):
+    by_model = scan_claude_projects(window)
+    for source in (scan_claude_pi(window), scan_claude_opencode(window)):
+        for model, bucket in source.items():
+            target = by_model.setdefault(model, empty_bucket())
+            for field in FIELDS:
+                target[field] += bucket[field]
     return by_model
 
 
