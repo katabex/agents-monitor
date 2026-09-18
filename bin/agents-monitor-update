@@ -10,7 +10,7 @@
 #
 # Bundled collectors are discovered by filename convention: anything
 # shipped as omarchy-agent-usage-<id> (executable, regular file) runs with
-# <id> as its provider id — a new collector is a dropped file, and this
+# <id> as its provider id - a new collector is a dropped file, and this
 # list never needs editing. The discovery layer
 # (omarchy-agent-usage-discover) rides the same slot.
 #

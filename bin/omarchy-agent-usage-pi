@@ -2,7 +2,7 @@
 """pi agent usage collector for the Omarchy agents panel.
 
 Prints (or, with --write, atomically writes) the record contract that
-~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+~/.local/state/omarchy/agents/usage/ consumers expect - the same contract
 the stock omarchy-agent-usage-claude/codex/fireworks collectors emit. The
 panel picks up any record that lands in that directory, so a pi tab appears
 without touching the plugin.
@@ -12,7 +12,7 @@ What it counts (decision: complement of the stock collectors):
   omarchy-agent-usage-claude's scan_pi_usage(); sessions on `openai-codex`
   (provider or api) are folded into the Codex tab by
   omarchy-agent-usage-codex's scan_pi_sessions(). This collector counts
-  everything ELSE — the providers no stock collector claims (currently zai,
+  everything ELSE - the providers no stock collector claims (currently zai,
   but any future provider lands here automatically rather than vanishing).
 
   Coupling note: if upstream ever widens those two filters, this exclusion

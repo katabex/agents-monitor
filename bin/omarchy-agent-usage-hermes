@@ -2,7 +2,7 @@
 """Hermes agent usage collector for the Agents Monitor panel.
 
 Prints (or, with --write, atomically writes) the record contract that
-~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+~/.local/state/omarchy/agents/usage/ consumers expect - the same contract
 the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
 bundled pi/opencode/openrouter collectors emit.
 
@@ -11,7 +11,7 @@ access, same discipline as the opencode collector: mode=ro never takes a
 write lock, so a running gateway is never blocked and the db is never
 created by accident). Hermes keeps per-session token aggregates and a
 session_model_usage table that breaks each session down by model and
-billing provider — that table is the backbone here:
+billing provider - that table is the backbone here:
 
   day buckets    session_model_usage rows, attributed to the session's
                  local start date (messages.token_count is NULL in this
@@ -21,7 +21,7 @@ billing provider — that table is the backbone here:
                  honest)
   modelUsage     session_model_usage grouped by model
   subscriptionUsage  grouped by billing_provider, mapped to service-tab
-                 ids — hermes billing through the Codex subscription
+                 ids - hermes billing through the Codex subscription
                  (billing_provider "openai-codex", mode
                  "subscription_included") lands on the OpenAI service
                  tab, exactly like pi's session-provider bucketing
@@ -35,7 +35,7 @@ chores (title_generation rows, empty billing_provider) inherit the
 session's billing provider so they attribute somewhere real.
 
 No double-count coupling: the stock Codex collector scans ~/.codex and
-never touches ~/.hermes — hermes sessions labelled "openai-codex" are
+never touches ~/.hermes - hermes sessions labelled "openai-codex" are
 billed there but recorded here only. The OpenAI service tab's limits are
 the account's own truth and already include hermes burn; that is the
 service axis doing its job, same as the GLM-compat wrinkle.

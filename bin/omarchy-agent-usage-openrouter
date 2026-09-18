@@ -2,11 +2,11 @@
 """OpenRouter credit collector for the Agents Monitor panel.
 
 Prints (or, with --write, atomically writes) the record contract that
-~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+~/.local/state/omarchy/agents/usage/ consumers expect - the same contract
 the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
 bundled pi/opencode collectors emit.
 
-OpenRouter has no subscription windows to meter — it is pay-as-you-go
+OpenRouter has no subscription windows to meter - it is pay-as-you-go
 credit, so the record carries a single "Credits used" limit row (no reset:
 credits do not renew) and a balance line instead of session history:
 
@@ -16,7 +16,7 @@ credits do not renew) and a balance line instead of session history:
 Balance is total_credits − total_usage (there is no `remaining` field).
 
 Key resolution: $OPENROUTER_API_KEY, else {"apiKey": …} in
-~/.config/omarchy/agents/openrouter.json (the fireworks.json precedent —
+~/.config/omarchy/agents/openrouter.json (the fireworks.json precedent -
 systemd user units do not inherit the shell environment). Without a key
 the record is printed not-ready (`configured` false) with help text and
 nothing is written, so a previously collected record is never clobbered
@@ -37,11 +37,11 @@ Stats are account-scoped (scope "account", hasLocalStats false, the
 fireworks convention): they replicate the same upstream truth on every
 synced device, so the sync merge must take the max, not the sum.
 
-Per-app credit burn — the inverse of an agent tab's PER SUBSCRIPTION,
+Per-app credit burn - the inverse of an agent tab's PER SUBSCRIPTION,
 since OpenRouter's one subscription is spent by many tools: a second,
 independent analytics query grouped by the "app" dimension (confirmed
 live against /api/v1/analytics/meta's dimensions list on 2026-09-13,
-alongside "model", "provider", "workspace" and others — not assumed from
+alongside "model", "provider", "workspace" and others - not assumed from
 community docs) fills modelUsage-shaped record["appUsage"] keyed by
 whatever string OpenRouter's own app-detection returns ("Codex", "pi",
 "Unknown", …), each bucket also carrying "spend" (USD) since the query
@@ -51,7 +51,7 @@ window exactly. This query is entirely separate from the model/day one
 above and fails independently of it: an unknown "app" dimension (checked
 against the same /meta payload, never assumed) or a failed probe just
 leaves appUsage out of the record, same fail-soft rule as everything
-else here — the model/day analytics this collector already shipped are
+else here - the model/day analytics this collector already shipped are
 untouched by whatever happens to the app query. --apps-debug prints the
 raw app rows to stderr, mirroring the bundled zai collector's
 --quota-debug.
@@ -93,7 +93,7 @@ METRIC_REQUESTS = "request_count"
 ANALYTICS_APP_DIMENSION = "app"
 
 # --apps-debug prints this; fetch_app_analytics() stashes for main() (left
-# at this default when scan() never reaches it — no management key).
+# at this default when scan() never reaches it - no management key).
 _LAST_APP_ROWS = {"rows": None, "reason": "no management key configured"}
 
 AUTH_HELP = (
@@ -295,12 +295,12 @@ def apply_analytics(record, rows, recent_dates):
 
 
 def dimension_known(meta_payload, name):
-    """True when /meta lists this dimension by name. False — never a
-    guess — on a parse failure or an unreachable /meta: an endpoint gone
+    """True when /meta lists this dimension by name. False - never a
+    guess - on a parse failure or an unreachable /meta: an endpoint gone
     quiet is not proof the app cut still exists, so the app query is
     skipped rather than attempted blind. meta_payload is fetch_json's
     return value, already unwrapped one level (its own ["data"] already
-    stripped) — this reads "dimensions" straight off it, not through a
+    stripped) - this reads "dimensions" straight off it, not through a
     second ["data"]."""
     try:
         for dim in meta_payload.get("dimensions") or []:
@@ -336,7 +336,7 @@ def query_app_analytics(key, metrics, start, end):
 
 def fetch_app_analytics(key, now):
     """Rows for the last ANALYTICS_WINDOW_DAYS days grouped by day+app, or
-    None on any failure — including "app" simply not being a dimension
+    None on any failure - including "app" simply not being a dimension
     /meta knows about. Never raises. Entirely independent of
     fetch_analytics (own /meta round trip, own query): a failure here
     can't take the model/day analytics down, and a failure there can't
@@ -381,7 +381,7 @@ def fetch_app_analytics(key, now):
 
 def apply_app_analytics(record, rows):
     """Fold app-dimension rows into record["appUsage"]; never raises. Left
-    out of the record entirely on unusable input — an absent key, not an
+    out of the record entirely on unusable input - an absent key, not an
     empty one, is what keeps the panel's app-burn section hidden, same
     "earned by data" rule as everything else here. Buckets carry
     modelUsage's token shape plus "spend" (USD), cheap since the query
@@ -526,7 +526,7 @@ def main():
         rows = _LAST_APP_ROWS["rows"]
         sys.stderr.write(f"OpenRouter app-dimension rows (reason: {reason}):\n")
         if rows is None:
-            sys.stderr.write("  (unavailable — see reason above)\n")
+            sys.stderr.write("  (unavailable - see reason above)\n")
         else:
             json.dump(rows, sys.stderr, indent=2)
             sys.stderr.write("\n")

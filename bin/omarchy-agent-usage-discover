@@ -4,7 +4,7 @@
 The Omarchy agent catalog names everything this distro considers an agent;
 this collector walks that funnel for the agents no dedicated collector owns
 yet and, for each one whose local store shows real usage, writes an MVP
-activity record into the stock usage directory — so the agent earns a tab
+activity record into the stock usage directory - so the agent earns a tab
 the moment it is used here, even before a stats parser exists. MVP records
 claim no tokens (recentDays/modelUsage stay empty; the day chart and model
 rows stay hidden); `activeDays` is what admits the tab, and
@@ -13,7 +13,7 @@ rows stay hidden); `activeDays` is what admits the tab, and
 Funnel, and where each stage's truth comes from:
 
   catalog    parsed at runtime from omarchy-menu.jsonc
-             (`setup.default.agent.<id>` — labels included). jsonc is
+             (`setup.default.agent.<id>` - labels included). jsonc is
              stripped (line comments, trailing commas) then json-parsed;
              any failure falls back to the vendored list below, so an
              upstream format change degrades, never breaks.
@@ -26,24 +26,24 @@ Funnel, and where each stage's truth comes from:
   used       the agent's store dir contains a non-empty data-ish file
              (*.jsonl/*.log/*.db/*.sqlite*/checkpoint or *chat*/*session*/*
              history* named), bounded walk (node_modules and caches
-             skipped). Store mtimes become `activeDates` — honest day
+             skipped). Store mtimes become `activeDates` - honest day
              activity, no token claims.
 
-Agents owned by dedicated collectors (claude, codex, fireworks — stock;
-pi, opencode, openrouter, hermes — bundled; omp folded into pi) are
+Agents owned by dedicated collectors (claude, codex, fireworks - stock;
+pi, opencode, openrouter, hermes - bundled; omp folded into pi) are
 skipped: their records are the collectors' business, and a discovery
 record would fight them. A used agent whose store later disappears keeps
 its record, stock-style.
 
-A second, independent record — id "discovery", written every run
-regardless of what the funnel above found — carries `installedUnused`:
+A second, independent record - id "discovery", written every run
+regardless of what the funnel above found - carries `installedUnused`:
 the catalog labels of agents this machine has installed (by the same
 installed check above) but never used, and that no collector owns. The
 panel's AGENT card renders this as a dim footer line ("Installed, never
 used here: …") so those agents are visible without earning a tab; an
 empty list still writes the record (the common case), it just renders no
-line. This is the only field on the record — no stats, no limits, no
-status/help pairing — so discovery never grows a service tab, an agent
+line. This is the only field on the record - no stats, no limits, no
+status/help pairing - so discovery never grows a service tab, an agent
 tab, or urgent styling of its own.
 
 No quota probe, no deletion, no network: this layer only ever adds tabs
@@ -204,7 +204,7 @@ def mvp_record(agent_id, label, active_dates):
         "hasPromptStats": False,
         "tierLabel": "usage detected",
         "limits": [],
-        "usageStatusText": "usage detected — no stats parser yet",
+        "usageStatusText": "usage detected - no stats parser yet",
         "authHelpText": "",
         "todayPrompts": 0,
         "todaySessions": 0,
@@ -224,7 +224,7 @@ def mvp_record(agent_id, label, active_dates):
 
 
 def discovery_record(installed_unused):
-    """The funnel's own record — never a per-agent tab, just the
+    """The funnel's own record - never a per-agent tab, just the
     installed-but-unused footer line. No stats, no limits, no
     status/help pairing: those are exactly the fields the panel's
     service/agent/urgent gates check, so this record earns none of them

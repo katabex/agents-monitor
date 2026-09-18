@@ -86,8 +86,8 @@ Item {
     scheduleSync()
   }
 
-  // A collector that could not reach its limits endpoint at all — typically
-  // the seconds after login before the network is up — writes retryAdvised
+  // A collector that could not reach its limits endpoint at all - typically
+  // the seconds after login before the network is up - writes retryAdvised
   // into its record. Honor it with one sooner try instead of waiting out the
   // full refresh interval; a run that reaches the endpoint clears the flag.
   // Only the advising agents rerun, so an outage at one provider does not
@@ -178,14 +178,14 @@ Item {
   function refreshAll(force) { runUpdate(force === true ? "force" : "normal") }
 
   // Opening the panel wants the numbers that go stale on the wire, not
-  // another walk over every transcript on disk — the collectors reuse their
+  // another walk over every transcript on disk - the collectors reuse their
   // recent scans in this mode.
   function refreshLimits() { runUpdate("limits") }
 
   // ------------------------------------------------------------- providers
 
   // An agent earns a place in the bar and the panel by being switched on in
-  // settings and having actually produced numbers — locally or on a synced
+  // settings and having actually produced numbers - locally or on a synced
   // device. With nothing to show, the whole module collapses out of the bar
   // rather than sitting there dimmed.
   property var enabledProviders: {
@@ -202,7 +202,7 @@ Item {
       var display = displayProvider(record)
       if (providerHasData(display)) result.push(display)
     }    // An agent that only ever ran on another machine has no local record, but
-    // its synced numbers still deserve a tab. Rate limits stay blank — they
+    // its synced numbers still deserve a tab. Rate limits stay blank - they
     // are per-account and never travel.
     var syncedProviders = syncConfigured() && aggregateData && aggregateData.providers ? aggregateData.providers : {}
     for (var syncedId in syncedProviders) {
@@ -222,10 +222,10 @@ Item {
   // All-time keeps a quiet day from hiding an agent; today's counts admit a
   // machine whose only source is history.jsonl, which knows nothing older.
   // A limits-only record (zai) with a dead probe and no local stats at all
-  // still deserves its tab when it sets the urgent status+help pairing —
+  // still deserves its tab when it sets the urgent status+help pairing -
   // that is the remedy the tab exists to show, not something to hide.
-  // The discovery record carries none of the above — no stats, no limits,
-  // no pairing, on purpose (it earns no tab of its own) — but a non-empty
+  // The discovery record carries none of the above - no stats, no limits,
+  // no pairing, on purpose (it earns no tab of its own) - but a non-empty
   // installedUnused is still real data: the AGENT card's footer line, not
   // a tab, is what it's for. Without this clause the record would never
   // reach the panel at all.
@@ -350,11 +350,11 @@ Item {
       recentModelUsage: synced ? stats.recentModelUsage : resolvedRecentModel(record),
       recentSubscriptionUsage: synced ? stats.recentSubscriptionUsage : resolvedRecentSubscription(record),
       // Per-app credit burn (openrouter today): device-local only for
-      // now — the cross-device snapshot/aggregate pipeline below doesn't
+      // now - the cross-device snapshot/aggregate pipeline below doesn't
       // carry it, so a synced view falls back to empty rather than merge.
       appUsage: synced ? (stats.appUsage || ({})) : (record.appUsage || ({})),
       // Installed-but-unused catalog labels (the discovery record only):
-      // machine state, not stats — device-local like appUsage, same
+      // machine state, not stats - device-local like appUsage, same
       // reason (the sync pipeline below doesn't carry it).
       installedUnused: synced ? (stats.installedUnused || []) : (record.installedUnused || []),
       subscriptionUsage: attributionFor(record),
@@ -657,7 +657,7 @@ Item {
 
   // Device-scoped stats add up across machines; account-scoped stats
   // (Fireworks' billing API) are replicas of the same upstream truth on
-  // every synced device, so the widest value wins — summing them would
+  // every synced device, so the widest value wins - summing them would
   // double every token per machine.
   function combineNumber(additive, current, value) {
     return additive ? numberValue(current) + numberValue(value) : Math.max(numberValue(current), numberValue(value))

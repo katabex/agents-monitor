@@ -10,14 +10,14 @@
 #
 # The copy ends with `omarchy restart shell`: the "Local plugin changed,
 # reloading" hot-reload path re-instantiates a CACHED QML component (verified
-# 2026-09-06 with a line-shift canary — the engine kept serving the old
+# 2026-09-06 with a line-shift canary - the engine kept serving the old
 # Panel.qml), so changed QML only takes effect after a shell restart.
 #
 # The machine-local omarchy-pi-usage.timer stays enabled on purpose
 # (option 2): the plugin refreshes all providers itself, and the timer
 # keeps pi.json fresh between panel refreshes and when the shell is not
 # running. The zai sibling below ships from this repo for the same job on
-# zai.json — load-bearing there since the panel's own --limits-only
+# zai.json - load-bearing there since the panel's own --limits-only
 # refreshes skip every bundled probe.
 
 set -euo pipefail

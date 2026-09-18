@@ -2,7 +2,7 @@
 """Z.ai GLM Coding Plan quota collector for the Agents Monitor panel.
 
 Prints (or, with --write, atomically writes) the record contract that
-~/.local/state/omarchy/agents/usage/ consumers expect — the same contract
+~/.local/state/omarchy/agents/usage/ consumers expect - the same contract
 the stock omarchy-agent-usage-claude/codex/fireworks collectors and the
 bundled pi/opencode/openrouter/hermes collectors emit.
 
@@ -12,14 +12,14 @@ probe of the undocumented-but-community-standard
   https://api.z.ai/api/monitor/usage/quota/limit
 
 moved here unchanged, key resolution included, so the Z.ai tab stops
-wearing OpenCode's identity — its own id, name, and mark, on its own
-record — instead of riding OpenCode's local-stats record as an override.
+wearing OpenCode's identity - its own id, name, and mark, on its own
+record - instead of riding OpenCode's local-stats record as an override.
 The GLM Coding Plan key still comes from OpenCode's auth.json
 (zai-coding-plan first, then zai) or $ZAI_API_KEY; that file remains the
 only place the key is issued to, coding-plan CLI or not.
 
 Limits-only record: hasLocalStats is always false and every stats bucket
-stays empty — this collector counts nothing, it only meters. The probe is
+stays empty - this collector counts nothing, it only meters. The probe is
 fail-soft (10 s timeout, single attempt, last good payload cached in
 XDG_CACHE_HOME/omarchy/agent-usage/zai-quota.json and reused while its
 windows are still open) so a dead network degrades to the cache, not a
@@ -99,7 +99,7 @@ def iso_reset(epoch_ms):
 # Window labels for the row types the endpoint has actually been observed
 # to send. `unit` is a time-unit enum: 3 = hour, 6 = week, 5 = the
 # search/zread tool quota (community docs call it monthly; the live reset
-# has been seen landing much sooner — the countdown carries the truth, so
+# has been seen landing much sooner - the countdown carries the truth, so
 # the label asserts no period).
 ZAI_ROW_LABELS = {
     ("TOKENS_LIMIT", 3): "Session (5-hour)",
@@ -110,7 +110,7 @@ ZAI_ROW_LABELS = {
 
 def zai_limit_rows(payload):
     """(limit rows, level) mapped from a quota payload. Pure: no clock, no
-    network. Unknown row types are skipped — V3 points-based plans may send
+    network. Unknown row types are skipped - V3 points-based plans may send
     CREDIT_LIMIT and other new shapes. Beware: `usage` is the cap,
     `currentValue` the consumption; only `percentage` is mapped."""
     data = payload.get("data") or {}
@@ -131,7 +131,7 @@ def zai_limit_rows(payload):
 
 def window_open(resets_at, now):
     """Stock claude rule: a cached percentage outlives its probe only until
-    its window rolls over — after that it describes a dead period. A row
+    its window rolls over - after that it describes a dead period. A row
     with no readable reset time is kept; a timestamp is no reason to throw
     away a real number."""
     if not resets_at:
@@ -201,7 +201,7 @@ def write_cached_payload(payload, now):
 def zai_quota(now, key):
     """(rows, level, status_text, help_text) for the record; never raises.
     Failures surface in authHelpText (the panel's urgent red box shows that,
-    and the hero falls back to the tier label) — usageStatusText stays the
+    and the hero falls back to the tier label) - usageStatusText stays the
     informational line."""
     payload = None
     source = ""
@@ -286,7 +286,7 @@ def main():
         payload = _LAST_RAW_PAYLOAD["payload"]
         sys.stderr.write(f"z.ai quota payload (source: {source}):\n")
         if payload is None:
-            sys.stderr.write("  (unavailable — probe failed and no fresh cache)\n")
+            sys.stderr.write("  (unavailable - probe failed and no fresh cache)\n")
         else:
             json.dump(payload, sys.stderr, indent=2)
             sys.stderr.write("\n")

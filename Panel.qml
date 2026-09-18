@@ -21,14 +21,14 @@ Panel {
   readonly property var providers: usage.enabledProviders
 
   // The panel reads the same records along two independent axes: what you
-  // pay for (services — balance and limit windows) and what ran (agents —
+  // pay for (services - balance and limit windows) and what ran (agents -
   // session stats). A provider earns a tab in a card by having that kind
   // of data: claude/codex sit in both strips, zai service-only (it has no
   // local stats), pi and opencode agent-only, and the two cards switch
   // independently. A limits-only record with a dead probe and no rows yet
-  // still earns the service tab via the urgent status+help pairing — that
+  // still earns the service tab via the urgent status+help pairing - that
   // pairing exists to be shown, not to be gated out. A subscription that
-  // is not configured on this machine (configured === false — credentials
+  // is not configured on this machine (configured === false - credentials
   // absent, per the collectors and the runner's config-check) earns no
   // tab at all (user decision 2026-09-17): it has no level or reset to
   // show, and its setup remedy is noise for a service never set up here.
@@ -109,7 +109,7 @@ Panel {
   readonly property var agent: agentProviders.length > 0 ? agentProviders[agentIndex] : null
 
   // The discovery record earns no tab of its own (see providerHasData's
-  // installedUnused clause) — it sits in root.providers directly, found
+  // installedUnused clause) - it sits in root.providers directly, found
   // by id, so its installedUnused list can back the AGENT card's footer
   // line regardless of which agent tab happens to be selected.
   readonly property var discoveryProvider: {
@@ -119,7 +119,7 @@ Panel {
   }
 
   // Legacy alias: bar-icon alarming and the IPC cursor follow the service
-  // card — its windows are what stop the next prompt.
+  // card - its windows are what stop the next prompt.
   readonly property var provider: service
 
   property bool cursorActive: false
@@ -141,7 +141,7 @@ Panel {
   // One status vocabulary for the whole panel: a subscription is urgent
   // when its fullest limit window is nearly spent, its prepaid balance is
   // nearly drained, or its probe failed outright (headline AND remedy both
-  // set — the status-box contract; stock collectors leave stale help text
+  // set - the status-box contract; stock collectors leave stale help text
   // on healthy records, so help alone must never count). The service tab
   // names wear this as their text color, so the strip doubles as a status
   // row, and the bar icon speaks the same word for the selected service.
@@ -294,8 +294,8 @@ Panel {
   function usageGroupTitle(p) {
     if (!p) return ""
     if (p.syncEnabled && Number(p.syncDeviceCount || 0) > 1)
-      return "USAGE — BY AGENT · " + Number(p.syncDeviceCount) + " DEVICES"
-    return "USAGE — BY AGENT"
+      return "USAGE - BY AGENT · " + Number(p.syncDeviceCount) + " DEVICES"
+    return "USAGE - BY AGENT"
   }
 
   // Local calendar date, recomputed from nowMs so a panel left open across
@@ -585,7 +585,7 @@ Panel {
   }
 
   // AGENT card footer: catalog agents installed on this machine but never
-  // used, and owned by no collector — visible without earning a tab.
+  // used, and owned by no collector - visible without earning a tab.
   // Empty (the common case) renders no line at all.
   function installedUnusedText() {
     var p = discoveryProvider
@@ -701,7 +701,7 @@ Panel {
     contentWidth: panel.fittedContentWidth(Math.max(Style.space(380),
       Math.max(serviceStrip.naturalRowWidth, agentStrip.naturalRowWidth) + Style.space(8)))
     // Taller than the control panels on purpose: this one is a dashboard,
-    // and the whole point is reading limits and history without scrolling —
+    // and the whole point is reading limits and history without scrolling -
     // so the card adopts to the content's full height and only the screen
     // itself (fittedContentHeight's availableCardHeight cap) can force the
     // Flickable fallback.
@@ -1074,7 +1074,7 @@ Panel {
               }
 
               // ---------- Installed, never used ----------
-              // Machine state, not this agent's — the discovery record,
+              // Machine state, not this agent's - the discovery record,
               // not root.agent, so the line never changes with the
               // selected tab. Unobtrusive on purpose: a caption, not a row.
               Text {
@@ -1131,7 +1131,7 @@ Panel {
 
                 Text {
                   textFormat: Text.PlainText
-                  text: "USAGE — BY SUBSCRIPTION AND MODEL"
+                  text: "USAGE - BY SUBSCRIPTION AND MODEL"
                   color: root.dim
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -1249,7 +1249,7 @@ Panel {
   // stock cannot do: a text color that survives selection. The kit derives
   // the selected text color from the fixed `selected-color` theme token
   // (a literal hex in generated themes), so the sanctioned per-instance
-  // `foreground` override — the way to tint a button — washes out the
+  // `foreground` override - the way to tint a button - washes out the
   // instant the tab is selected, exactly when you are looking at it
   // (observed live: OpenAI at 95% lost its urgent name on selection).
   // Here the status color wins in every state; selection speaks through
@@ -1282,7 +1282,7 @@ Panel {
     readonly property var _normalBorderSpec: Border.controlSpec("normal", root.foreground, root.accent)
     // Tabs are always bordered (stock delegates pass bordered: true), and a
     // selected tab keeps the normal border unless the theme opts into a
-    // dedicated selected border — same precedence as stock.
+    // dedicated selected border - same precedence as stock.
     readonly property var _borderSpec: hot ? _hoverBorderSpec
       : selected ? (Border.controlHasWidth("selected") ? _selectedBorderSpec : _normalBorderSpec)
       : _normalBorderSpec
@@ -1366,7 +1366,7 @@ Panel {
         textFormat: Text.PlainText
         text: limitRow.window && limitRow.window.percent >= 0
           ? Math.round(limitRow.window.percent * 100) + "%"
-          : "—"
+          : "-"
         color: limitRow.alarming ? root.urgent : root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
@@ -1506,7 +1506,7 @@ Panel {
   // instead of stacking under it, which keeps the whole dashboard on one screen.
   // Day/model charts for whichever provider they are bound to. Agents
   // show theirs in the agent card; account-scoped services (OpenRouter,
-  // Fireworks) show theirs inside the service card — their tokens are
+  // Fireworks) show theirs inside the service card - their tokens are
   // credit burn, subscription data, not agent activity.
   component UsageCharts: Column {
     id: charts

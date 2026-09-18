@@ -5,13 +5,13 @@ Prints (or, with --write, atomically writes) the record contract that
 ~/.local/state/omarchy/agents/usage/ consumers expect.
 
 Store investigation (2026-09-13, copilot 1.0.83): ~/.copilot holds
-session-state/*/events.jsonl (rich events — models, turns, hooks — but no
+session-state/*/events.jsonl (rich events - models, turns, hooks - but no
 token counts; model metadata only), process logs (MCP noise), and the
 real prize, session-store.db (SQLite, read with mode=ro so a running
 Copilot is never blocked). Its schema is exactly what a token parser
-wants — assistant_usage_events(input_tokens, output_tokens,
+wants - assistant_usage_events(input_tokens, output_tokens,
 cache_read_tokens, cache_write_tokens, reasoning_tokens, model,
-created_at) — but the table is EMPTY in this version: the CLI does not
+created_at) - but the table is EMPTY in this version: the CLI does not
 persist usage yet. The upgrade is one SELECT away when a future version
 starts filling it:
 
@@ -22,7 +22,7 @@ starts filling it:
 Until then this is an activity record, the honest maximum the store
 allows: prompts are turns with a non-empty user_message, sessions are
 sessions that actually ran a turn, and day buckets come from turn
-timestamps (local dates; ISO-UTC text in the db). No token claims —
+timestamps (local dates; ISO-UTC text in the db). No token claims -
 recentDays and modelUsage stay empty, so the day chart and model rows
 stay hidden rather than lie. Copilot rides the GitHub Copilot
 subscription, which has no service tab here, so there is no attribution
@@ -91,7 +91,7 @@ def scan():
         "hasLocalStats": total_prompts > 0,
         "tierLabel": "local stats",
         "limits": [],
-        "usageStatusText": "usage detected — copilot persists no token counts yet",
+        "usageStatusText": "usage detected - copilot persists no token counts yet",
         "authHelpText": "",
         "hasPromptStats": True,
         "todayPrompts": today_prompts,
