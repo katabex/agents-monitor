@@ -74,8 +74,21 @@ record (`bin/omarchy-agent-usage-zai`), limits-only, so it carries Z.ai's
 own mark (traced from the official logo) and shows up service-only even
 with no local OpenCode activity at all — a dead probe and no key still
 write the record, with the remedy in its urgent status box, so the tab
-never silently vanishes. Below the agent card's PER SUBSCRIPTION, the agent
-card also carries a dim, card-level footer line — "Installed, never used
+never silently vanishes. Below the agent card's PER SUBSCRIPTION, an
+ALL AGENTS section (user decision 2026-09-18) shows the same two
+breakdowns - BY MODEL and BY SUBSCRIPTION - summed across every tool,
+regardless of which agent tab is selected: card-level like the footer
+below it, so switching tabs never changes it. It answers what the
+per-agent PER SUBSCRIPTION section structurally can't: pi deliberately
+excludes tokens burned through anthropic/openai-codex (they belong to
+the Claude Code/Codex tabs instead, avoiding a double-count with those
+tabs' own transcript scans) - so a week spent partly on pi-via-Anthropic
+and partly on Claude Code CLI never added up anywhere on screen until
+this section did the sum itself, using the same recentModelUsage/
+recentSubscriptionUsage fields, mindful of exactly which sources
+already overlap (see `globalModelRows`/`globalSubscriptionRows` in
+Panel.qml for the no-double-count rule per collector). Below THAT, the
+agent card also carries a dim, card-level footer line — "Installed, never used
 here: Gemini · Crush · Muse Code" — sourced from the discovery record's
 `installedUnused` regardless of which agent tab is selected (machine
 state, not a per-agent fact); empty or absent leaves it out too, same
@@ -146,6 +159,12 @@ and (PER SUBSCRIPTION) counts only this machine. OpenRouter's per-app
 breakdown still lands in its record's `appUsage` (see `omarchy-agent-usage-openrouter`)
 but no longer renders anywhere after the service card
 was reduced to level + reset.
+
+pi's own exclusion (anthropic/openai-codex go to Claude Code/Codex
+instead) means pi's PER SUBSCRIPTION section can legitimately show only
+Z.ai even in a week spent mostly on Anthropic via pi - the ALL AGENTS
+section on the agent card (see above) is where that Anthropic burn
+reappears, summed with every other tool's.
 
 ## How bundled collection works
 

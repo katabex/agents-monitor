@@ -471,6 +471,134 @@ Panel {
     return result
   }
 
+  // ---------------------------------------------------------------- global
+
+  // A record from root.providers by id - the ALL AGENTS aggregate needs
+  // specific tools by name (claude, codex, pi, opencode, hermes), not
+  // whichever agent happens to be selected. Same lookup discoveryProvider
+  // already does inline.
+  function providerById(id) {
+    for (var i = 0; i < root.providers.length; i++)
+      if (String(root.providers[i].providerId) === id) return root.providers[i]
+    return null
+  }
+
+  function emptyUsageBucket() {
+    return { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 }
+  }
+
+  function addBucketInto(target, bucket) {
+    if (!bucket) return
+    target.inputTokens += Number(bucket.inputTokens || 0)
+    target.outputTokens += Number(bucket.outputTokens || 0)
+    target.cacheReadInputTokens += Number(bucket.cacheReadInputTokens || 0)
+    target.cacheCreationInputTokens += Number(bucket.cacheCreationInputTokens || 0)
+  }
+
+  function bucketTotal(bucket) {
+    return bucket.inputTokens + bucket.outputTokens + bucket.cacheReadInputTokens + bucket.cacheCreationInputTokens
+  }
+
+  // Every local tool's 7-day burn, summed - "how much did I use this week,
+  // regardless which agent did it" (user decision 2026-09-18). Five known
+  // tool ids, enumerated by name rather than discovered generically: a
+  // service record (zai/openrouter/fireworks - billing backends, not
+  // tools) must never join a "which tool" total. OpenRouter's own record
+  // in particular is account-wide analytics that already reflects every
+  // tool's OpenRouter spend from a different vantage point (the account
+  // API, not a local session count) - summing it in here would double
+  // the number, not complete it.
+  //
+  // No-double-count rule, from the actual collector topology (see
+  // agents-monitor-recent-stats and each bundled collector's docstring):
+  //   claude, codex   already the union of every source that can burn
+  //                   that subscription locally (native transcripts, pi
+  //                   sessions, opencode sessions) - added wholesale.
+  //   pi              already excludes anthropic/openai-codex from its
+  //                   own totals (CLAIMED_PROVIDERS) - added wholesale.
+  //   hermes          its store is never rescanned by any stock
+  //                   collector (see its own docstring) - any claude/
+  //                   codex contribution it has is genuinely additional,
+  //                   not a duplicate - added wholesale.
+  //   opencode        its db IS independently rescanned by both claude's
+  //                   and codex's stock collectors, so a claude/codex
+  //                   entry in its own subscriptionUsage would be a
+  //                   literal repeat of tokens already counted above -
+  //                   excluded from the subscription sum below. Its
+  //                   model-level buckets are not similarly filtered
+  //                   (opencode has never actually produced a claude/
+  //                   codex entry here - a documented, currently-dormant
+  //                   gap, not a live one, and cheaper to flag than to
+  //                   chase: model ids alone don't carry a subscription
+  //                   tag to filter by).
+  function globalModelRows() {
+    var totals = {}
+    var ids = ["claude", "codex", "pi", "opencode", "hermes"]
+    for (var i = 0; i < ids.length; i++) {
+      var p = providerById(ids[i])
+      var usageByModel = p && p.recentModelUsage !== undefined ? p.recentModelUsage : {}
+      for (var model in usageByModel) {
+        var target = totals[model] || (totals[model] = emptyUsageBucket())
+        addBucketInto(target, usageByModel[model])
+      }
+    }
+    var rows = []
+    for (var name in totals) {
+      var total = bucketTotal(totals[name])
+      if (total > 0)
+        rows.push({
+          name: usage.friendlyModelName(name),
+          total: total,
+          input: totals[name].inputTokens,
+          output: totals[name].outputTokens,
+          cacheRead: totals[name].cacheReadInputTokens,
+          cacheWrite: totals[name].cacheCreationInputTokens
+        })
+    }
+    rows.sort(function(a, b) { return b.total - a.total })
+    return rows.slice(0, 6)
+  }
+
+  function globalSubscriptionRows() {
+    var totals = {}
+    function add(id, bucket) {
+      if (!bucket) return
+      var target = totals[id] || (totals[id] = emptyUsageBucket())
+      addBucketInto(target, bucket)
+    }
+
+    var claudeAttr = synthesizedRecentAttribution(providerById("claude"))
+    for (var ck in (claudeAttr || {})) add(ck, claudeAttr[ck])
+    var codexAttr = synthesizedRecentAttribution(providerById("codex"))
+    for (var dk in (codexAttr || {})) add(dk, codexAttr[dk])
+
+    var piSub = (providerById("pi") || {}).recentSubscriptionUsage || {}
+    for (var pk in piSub) add(pk, piSub[pk])
+    var hermesSub = (providerById("hermes") || {}).recentSubscriptionUsage || {}
+    for (var hk in hermesSub) add(hk, hermesSub[hk])
+    var opencodeSub = (providerById("opencode") || {}).recentSubscriptionUsage || {}
+    for (var ok in opencodeSub) {
+      if (ok === "claude" || ok === "codex") continue  // already counted above; see the comment on globalModelRows
+      add(ok, opencodeSub[ok])
+    }
+
+    var rows = []
+    for (var id in totals) {
+      var total = bucketTotal(totals[id])
+      if (total > 0)
+        rows.push({
+          name: subscriptionDisplayName(id),
+          total: total,
+          input: totals[id].inputTokens,
+          output: totals[id].outputTokens,
+          cacheRead: totals[id].cacheReadInputTokens,
+          cacheWrite: totals[id].cacheCreationInputTokens
+        })
+    }
+    rows.sort(function(a, b) { return b.total - a.total })
+    return rows
+  }
+
   // Tokens by model in the last 7 days (user decision 2026-09-18): the
   // record's recentModelUsage - the same window TOKENS BY DAY charts.
   // Undefined (a collector that cannot scope by recency, or a synced
@@ -1011,6 +1139,67 @@ Panel {
                     width: subscriptionSection.width
                     row: modelData
                     share: modelData.total / Math.max(1, subscriptionSection.rows[0].total)
+                  }
+                }
+              }
+
+              // ---------- All agents ----------
+              // Regardless of which agent tab is selected: every tool's
+              // 7-day burn, summed by model and by subscription (user
+              // decision 2026-09-18). Card-level, like the installed-but-
+              // unused footer below - it never changes when you switch
+              // tabs. See globalModelRows/globalSubscriptionRows for the
+              // no-double-count rule the collector topology demands.
+              Column {
+                id: globalModelSection
+                visible: rows.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var rows: root.globalModelRows()
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "ALL AGENTS — BY MODEL"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: globalModelSection.rows
+
+                  ModelRow {
+                    required property var modelData
+                    width: globalModelSection.width
+                    row: modelData
+                    share: modelData.total / Math.max(1, globalModelSection.rows[0].total)
+                  }
+                }
+              }
+
+              Column {
+                id: globalSubSection
+                visible: rows.length > 0
+                width: parent.width
+                spacing: Style.spacing.md
+
+                readonly property var rows: root.globalSubscriptionRows()
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "ALL AGENTS — BY SUBSCRIPTION"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                }
+
+                Repeater {
+                  model: globalSubSection.rows
+
+                  ModelRow {
+                    required property var modelData
+                    width: globalSubSection.width
+                    row: modelData
+                    share: modelData.total / Math.max(1, globalSubSection.rows[0].total)
                   }
                 }
               }
