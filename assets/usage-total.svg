@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Mark for the USAGE — BY SUBSCRIPTION AND MODEL card: not a
+       provider id (nothing is "selected" for a pure aggregate), so this
+       is a self-drawn generic glyph rather than a traced brand logo — a
+       small ascending bar chart, echoing the panel's own Meter/DayRow/
+       ModelRow bars rather than borrowing anyone else's mark. Same
+       stroke discipline as agent-fallback.svg (viewBox, stroke-width,
+       round caps) for visual parity in the 18px slot. See
+       usage-total-light.svg for light surfaces.
+  -->
+  <path d="M7 18 L7 14 M12 18 L12 10 M17 18 L17 6" fill="none"
+        stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

@@ -79,7 +79,12 @@ record (`bin/omarchy-agent-usage-zai`), limits-only, so it carries Z.ai's
 own mark (traced from the official logo) and shows up service-only even
 with no local OpenCode activity at all — a dead probe and no key still
 write the record, with the remedy in its urgent status box, so the tab
-never silently vanishes. USAGE — BY AGENT carries no per-tab model or
+never silently vanishes. USAGE — BY SUBSCRIPTION AND MODEL carries a mark
+too, `assets/usage-total{,-light}.svg` (a self-drawn ascending bar chart,
+same `ProviderMark` fallback walk as everyone else's, `markId:
+"usage-total"` rather than a provider id since nothing is "selected"
+for a pure aggregate) - not a traced brand logo like the others, since
+this card doesn't belong to a company or a tool. USAGE — BY AGENT carries no per-tab model or
 subscription breakdown (user decision 2026-09-18: removed along with
 PER SUBSCRIPTION and TOKENS BY MODEL, both scoped to whichever tab
 happened to be selected) - just the tab strip, TOKENS BY DAY, and a dim,

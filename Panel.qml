@@ -1087,12 +1087,26 @@ Panel {
               width: parent.width - Style.space(24)
               spacing: Style.space(12)
 
-              Text {
-                textFormat: Text.PlainText
-                text: "USAGE — BY SUBSCRIPTION AND MODEL"
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                // Not a provider id - nothing is "selected" for a pure
+                // aggregate - so this resolves assets/usage-total{,-light}.svg
+                // (a self-drawn bar-chart glyph, see the asset's own
+                // comment) via the same fallback walk as every other mark.
+                ProviderMark {
+                  markId: "usage-total"
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "USAGE — BY SUBSCRIPTION AND MODEL"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
               }
 
               Column {
