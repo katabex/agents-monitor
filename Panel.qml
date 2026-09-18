@@ -341,6 +341,16 @@ Panel {
     return peak
   }
 
+  // Unmapped ids pass through (README's documented contract - a new
+  // subscription id shows up rather than vanishing), but a raw provider
+  // id like "ollama" is lowercase where every mapped name here is a
+  // proper noun - capitalize the first letter so an unmapped name reads
+  // like the rest of the list instead of looking unfinished.
+  function capitalizeFirst(text) {
+    var value = String(text || "")
+    return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value
+  }
+
   function subscriptionDisplayName(id) {
     var map = {
       claude: "Anthropic",
@@ -351,7 +361,7 @@ Panel {
       fireworks: "Fireworks",
       "opencode-zen": "OpenCode Zen"
     }
-    return map[String(id)] || String(id)
+    return map[String(id)] || capitalizeFirst(id)
   }
 
   // ---------------------------------------------------------------- ranking
