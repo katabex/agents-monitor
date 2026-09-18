@@ -25,7 +25,7 @@ Claude Code agent below (day/model charts, per-subscription attribution).*
 | **opencode** | — (local stats only) | `~/.local/share/opencode/opencode.db` (SQLite, read-only) — every assistant message, all providers; the stock collectors never scan OpenCode's store, so nothing needs excluding |
 | **zai** | GLM Coding Plan quota (undocumented community endpoint `api/monitor/usage/quota/limit`, keyed from OpenCode's `auth.json`): 5-hour + weekly token windows, tool-request quota, plan level; fail-soft with a cached-payload fallback | — (account-level quota, no local store of its own) |
 | **openrouter** | pay-as-you-go credits (official `/api/v1/credits` + `/api/v1/auth/key`): one "Credits used" meter, balance line — credits do not reset | token stats via the Analytics API (`/api/v1/analytics/query`, management key required; balance-only without it), plus a CREDIT BURN BY APP breakdown on the service card (`app` dimension, same management key) |
-| **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) lands on the OpenAI service tab in PER SUBSCRIPTION |
+| **hermes** | — (local stats only; it burns other subscriptions) | `~/.hermes/state.db` (SQLite, read-only) — `session_model_usage` rows by model and billing provider, attributed to the session's start day; hermes riding the Codex subscription (`billing_provider: openai-codex`) shows up on the OpenAI service tab's use-ranking and in the agent card's ALL AGENTS section |
 | **copilot** | — (activity only: copilot 1.0.83 persists no token counts — `session-store.db`'s `assistant_usage_events` is empty, upgrade path documented in the collector) | `~/.copilot/session-store.db` (SQLite, read-only) — prompts are turns with a user message, sessions are sessions that ran a turn, day buckets from turn timestamps; no token claims, so charts stay hidden rather than lie |
 | **discovery** | — | the catalog-driven detection layer: parses Omarchy's agent catalog at runtime (`omarchy-menu.jsonc`, vendored fallback), applies `omarchy-default-agent`'s installed-semantics (on-demand mise stubs are NOT installs), probes stores, and writes MVP activity records for used agents without a collector. Agent tabs are earned by use in the last 7 days — activity-only records (and agents idle for a week) stay maintained in the usage dir but out of the strip. Also writes its own `discovery.json` every run, carrying `installedUnused` — catalog agents installed here but never used and owned by no collector — which the AGENT card shows as a dim footer line instead of a tab |
 
@@ -40,9 +40,11 @@ Hermes — an agent idle for a week leaves the strip until its next token
 switching independently. Both strips are ordered by use, most used
 first (user decision 2026-09-17). The agent strip ranks by the same
 7-day window that admits a tab (recentDays summed): the strip never
-disagrees with the day chart it selects into. The subscription stripranks by each subscription's total use: the larger of its agents'
+disagrees with the day chart it selects into. The subscription strip
+ranks by each subscription's total use: the larger of its agents'
 attributed token total (`subscriptionUsage`, summed across agents -
-the same numbers PER SUBSCRIPTION renders) and its own record's
+the same numbers the agent card's ALL AGENTS section sums globally) and
+its own record's
 all-time token total (authoritative account analytics for
 OpenRouter/Fireworks; identical to the attribution for claude/codex by
 construction). All-time, because attribution exists only as totals;
@@ -74,20 +76,24 @@ record (`bin/omarchy-agent-usage-zai`), limits-only, so it carries Z.ai's
 own mark (traced from the official logo) and shows up service-only even
 with no local OpenCode activity at all — a dead probe and no key still
 write the record, with the remedy in its urgent status box, so the tab
-never silently vanishes. Below the agent card's PER SUBSCRIPTION, an
-ALL AGENTS section (user decision 2026-09-18) shows the same two
-breakdowns - BY MODEL and BY SUBSCRIPTION - summed across every tool,
-regardless of which agent tab is selected: card-level like the footer
-below it, so switching tabs never changes it. It answers what the
-per-agent PER SUBSCRIPTION section structurally can't: pi deliberately
-excludes tokens burned through anthropic/openai-codex (they belong to
-the Claude Code/Codex tabs instead, avoiding a double-count with those
-tabs' own transcript scans) - so a week spent partly on pi-via-Anthropic
-and partly on Claude Code CLI never added up anywhere on screen until
-this section did the sum itself, using the same recentModelUsage/
-recentSubscriptionUsage fields, mindful of exactly which sources
-already overlap (see `globalModelRows`/`globalSubscriptionRows` in
-Panel.qml for the no-double-count rule per collector). Below THAT, the
+never silently vanishes. The agent card carries no per-tab model or
+subscription breakdown (user decision 2026-09-18: removed along with
+PER SUBSCRIPTION and TOKENS BY MODEL, both scoped to whichever tab
+happened to be selected) - only TOKENS BY DAY stays per-tab. In their
+place, an ALL AGENTS section (added the same day the per-tab ones were
+removed, v0.10.0) shows two breakdowns - BY MODEL and BY SUBSCRIPTION -
+summed across every tool, card-level like the footer below it, so
+switching tabs never changes it. It answers what no per-agent section
+ever could: pi deliberately excludes tokens burned through
+anthropic/openai-codex (they belong to the Claude Code/Codex tabs'
+own totals instead, avoiding a double-count with those tabs' own
+transcript scans) - so a week spent partly on pi-via-Anthropic and
+partly on Claude Code CLI never added up anywhere on screen until this
+section did the sum itself, using the same recentModelUsage/
+recentSubscriptionUsage fields collectors already write, mindful of
+exactly which sources already overlap (see `globalModelRows`/
+`globalSubscriptionRows` in Panel.qml for the no-double-count rule per
+collector). Below THAT, the
 agent card also carries a dim, card-level footer line — "Installed, never used
 here: Gemini · Crush · Muse Code" — sourced from the discovery record's
 `installedUnused` regardless of which agent tab is selected (machine
@@ -136,8 +142,13 @@ config directory.
 
 ## Attribution
 
-Every agent tab answers "which subscription did my tokens burn" in a PER
-SUBSCRIPTION section under TOKENS BY MODEL:
+Each collector still tags every message with which subscription burned
+it - `subscriptionUsage` / `recentSubscriptionUsage` in the record
+contract - even though no agent tab renders that breakdown on its own
+card anymore (removed 2026-09-18, see above). The data now surfaces two
+places: the subscription strip's use-based ranking (all-time, see
+above) and the agent card's ALL AGENTS — BY SUBSCRIPTION section
+(7-day, summed across every tool). The mapping itself is unchanged:
 
 - **pi** — buckets each counted message by its session provider
   (`zai` → Z.ai, `openrouter` → OpenRouter; unmapped ids pass through)
@@ -151,20 +162,20 @@ SUBSCRIPTION section under TOKENS BY MODEL:
   through a compat gateway still counts as its gateway's subscription,
   e.g. GLM via z.ai's Anthropic-compat endpoint shows under Anthropic)
 
-OpenRouter/Fireworks tabs carry no PER SUBSCRIPTION section themselves —
+OpenRouter/Fireworks tabs carry no attribution breakdown themselves —
 their usage is account-wide analytics, one subscription by definition.
 Fireworks has no `app` analogue (no comparable dimension in its usage API)
 and stays totals-only. Attribution is billing-accurate but session-static,
-and (PER SUBSCRIPTION) counts only this machine. OpenRouter's per-app
+and counts only this machine. OpenRouter's per-app
 breakdown still lands in its record's `appUsage` (see `omarchy-agent-usage-openrouter`)
 but no longer renders anywhere after the service card
 was reduced to level + reset.
 
 pi's own exclusion (anthropic/openai-codex go to Claude Code/Codex
-instead) means pi's PER SUBSCRIPTION section can legitimately show only
-Z.ai even in a week spent mostly on Anthropic via pi - the ALL AGENTS
-section on the agent card (see above) is where that Anthropic burn
-reappears, summed with every other tool's.
+instead) means a week spent mostly on Anthropic via pi never showed up
+on pi's own card even when PER SUBSCRIPTION existed there - the ALL
+AGENTS section on the agent card (see above) is where that Anthropic
+burn surfaces, summed with every other tool's.
 
 ## How bundled collection works
 
@@ -204,8 +215,9 @@ reappears, summed with every other tool's.
   record's own recentDays (mismatches print to stderr - this is how a
   first cut that only scanned claude's native transcripts got caught
   undercounting a pi session on the anthropic provider, v0.9.1).
-  The panel synthesizes claude/codex recent PER SUBSCRIPTION
-  attribution from it, exactly as it synthesizes the all-time side
+  The panel synthesizes claude/codex's single-subscription attribution
+  from it for the subscription strip's ranking and the ALL AGENTS
+  section, exactly as it synthesizes the all-time side
 - `bin/agents-monitor-config-check` — not a collector (the name sits
   outside the `omarchy-agent-usage-*` glob on purpose): stamps
   `configured` (machine-local credential presence, mirroring each

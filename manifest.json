@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "ptr.agents-monitor",
   "name": "Agents Monitor",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "author": "ptr",
   "license": "MIT",
   "description": "Claude Code, Codex, Copilot, Fireworks, pi, OpenCode, Z.ai GLM Coding Plan quota, OpenRouter credit usage, and Hermes usage, limits, and pace in an Omarchy bar panel. Fork of the stock omarchy.agents widget with built-in pi, OpenCode, Z.ai, and OpenRouter collection.",
@@ -15,7 +15,7 @@
   },
   "barWidget": {
     "displayName": "Agents Monitor",
-    "description": "One bar icon and one panel: per-subscription usage level and reset time, plus each agent's today, last week, and all-time model breakdown.",
+    "description": "One bar icon and one panel: per-subscription usage level and reset time, each active agent's day-by-day usage this week, and a cumulative model/subscription breakdown across every agent.",
     "category": "AI",
     "aliases": [
       "agents",

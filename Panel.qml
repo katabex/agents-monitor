@@ -131,7 +131,6 @@ Panel {
   property double nowMs: Date.now()
 
   readonly property var limits: limitWindows(service)
-  readonly property var models: modelRows(agent)
   readonly property var balance: service ? (service.balance || null) : null
   // A prepaid account runs low the way a subscription window fills up: the
   // last 10% of the funded credits lights the same alarm.
@@ -342,44 +341,6 @@ Panel {
     var peak = 0
     for (var i = 0; i < days.length; i++) peak = Math.max(peak, Number(days[i].messageCount || 0))
     return peak
-  }
-
-  // Which subscriptions this agent's tokens burned, heaviest first -
-  // in the last 7 days (user decision 2026-09-18): the record's
-  // recentSubscriptionUsage when the collector writes it, else the same
-  // single-subscription synthesis attributionFor does, on the recent
-  // model buckets (claude/codex burn exactly one subscription by
-  // definition). A record with neither recent field shows no rows: an
-  // agent whose collector cannot scope by recency shows its week in the
-  // day chart only, never all-time numbers pretending to be the week.
-  function subscriptionRows(p) {
-    var usageBySub = null
-    if (p) {
-      if (p.recentSubscriptionUsage !== undefined)
-        usageBySub = p.recentSubscriptionUsage
-      else if (String(p.providerId) === "claude" || String(p.providerId) === "codex")
-        usageBySub = synthesizedRecentAttribution(p)
-    }
-    var rows = []
-    for (var id in (usageBySub || {})) {
-      var bucket = usageBySub[id] || {}
-      var input = Number(bucket.inputTokens || 0)
-      var output = Number(bucket.outputTokens || 0)
-      var cacheRead = Number(bucket.cacheReadInputTokens || 0)
-      var cacheWrite = Number(bucket.cacheCreationInputTokens || 0)
-      var total = input + output + cacheRead + cacheWrite
-      if (total > 0)
-        rows.push({
-          name: subscriptionDisplayName(id),
-          total: total,
-          input: input,
-          output: output,
-          cacheRead: cacheRead,
-          cacheWrite: cacheWrite
-        })
-    }
-    rows.sort(function(a, b) { return b.total - a.total })
-    return rows
   }
 
   function subscriptionDisplayName(id) {
@@ -597,33 +558,6 @@ Panel {
     }
     rows.sort(function(a, b) { return b.total - a.total })
     return rows
-  }
-
-  // Tokens by model in the last 7 days (user decision 2026-09-18): the
-  // record's recentModelUsage - the same window TOKENS BY DAY charts.
-  // Undefined (a collector that cannot scope by recency, or a synced
-  // snapshot from before the field existed) renders no rows rather than
-  // all-time numbers dressed as the week.
-  function modelRows(p) {
-    var usageByModel = p && p.recentModelUsage !== undefined ? p.recentModelUsage : {}
-    var rows = []
-    for (var id in usageByModel) {
-      var bucket = usageByModel[id] || {}
-      var input = Number(bucket.inputTokens || 0)
-      var output = Number(bucket.outputTokens || 0)
-      var cacheRead = Number(bucket.cacheReadInputTokens || 0)
-      var cacheWrite = Number(bucket.cacheCreationInputTokens || 0)
-      rows.push({
-        name: usage.friendlyModelName(id),
-        total: input + output + cacheRead + cacheWrite,
-        input: input,
-        output: output,
-        cacheRead: cacheRead,
-        cacheWrite: cacheWrite
-      })
-    }
-    rows.sort(function(a, b) { return b.total - a.total })
-    return rows.slice(0, 4)
   }
 
   function modelTooltip(row) {
@@ -1112,37 +1046,6 @@ Panel {
               }
 
 
-
-              // ---------- Per subscription ----------
-              // The attribution mirror of the service card: which
-              // subscription's credits this agent's tokens burned.
-              Column {
-                id: subscriptionSection
-                visible: rows.length > 0
-                width: parent.width
-                spacing: Style.spacing.md
-
-                readonly property var rows: root.subscriptionRows(root.agent)
-
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "PER SUBSCRIPTION"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                }
-
-                Repeater {
-                  model: subscriptionSection.rows
-
-                  ModelRow {
-                    required property var modelData
-                    width: subscriptionSection.width
-                    row: modelData
-                    share: modelData.total / Math.max(1, subscriptionSection.rows[0].total)
-                  }
-                }
-              }
-
               // ---------- All agents ----------
               // Regardless of which agent tab is selected: every tool's
               // 7-day burn, summed by model and by subscription (user
@@ -1539,7 +1442,6 @@ Panel {
     id: charts
     property var p: null
     property string sectionTitle: ""
-    readonly property var modelList: root.modelRows(p)
     width: parent.width
     spacing: Style.spacing.md
 
@@ -1582,32 +1484,6 @@ Panel {
               // By date, not by position: the Claude stats-cache fallback can
               // hand us a window that stops short of today.
               today: String(modelData.date || "") === root.todayDate()
-            }
-          }
-        }
-        Column {
-          id: modelSection
-          visible: charts.modelList.length > 0
-          width: parent.width
-          spacing: Style.spacing.md
-
-          PanelSectionHeader {
-            width: parent.width
-            text: "TOKENS BY MODEL"
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
-          Repeater {
-            model: charts.modelList
-
-            ModelRow {
-              required property var modelData
-              width: modelSection.width
-              row: modelData
-              // Scaled to the heaviest model, so the top row is always full —
-              // the same scale-to-peak the weekly chart uses for its busiest day.
-              share: modelData.total / Math.max(1, charts.modelList[0].total)
             }
           }
         }
