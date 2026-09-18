@@ -954,11 +954,11 @@ Panel {
             }
           }
 
-          // ---------- Agent card ----------
+          // ---------- Agent card: by agent ----------
           // One tab per thing that runs; the title names whose truth the
           // charts tell (machine-local sessions, account-wide analytics,
           // or a cross-device merge). Selecting a tab here never disturbs
-          // the service card above.
+          // the service card above or the by-subscription card below.
           BorderSurface {
             visible: root.agentProviders.length > 0
             width: parent.width
@@ -1045,14 +1045,58 @@ Panel {
                 p: root.agent
               }
 
+              // ---------- Installed, never used ----------
+              // Machine state, not this agent's — the discovery record,
+              // not root.agent, so the line never changes with the
+              // selected tab. Unobtrusive on purpose: a caption, not a row.
+              Text {
+                textFormat: Text.PlainText
+                visible: text !== ""
+                width: parent.width
+                text: root.installedUnusedText()
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
 
-              // ---------- All agents ----------
-              // Regardless of which agent tab is selected: every tool's
-              // 7-day burn, summed by model and by subscription (user
-              // decision 2026-09-18). Card-level, like the installed-but-
-              // unused footer below - it never changes when you switch
-              // tabs. See globalModelRows/globalSubscriptionRows for the
-              // no-double-count rule the collector topology demands.
+            }
+          }
+
+          // ---------- Agent card: by subscription ----------
+          // Every tool's 7-day burn, summed by model and by subscription
+          // (user decision 2026-09-18, split into its own card 2026-09-18):
+          // regardless of which agent tab is selected above - a separate
+          // card, not a section, because it answers a different question
+          // ("how much, in total" vs "which tool, this week") and never
+          // changes when the tab strip above does. See
+          // globalModelRows/globalSubscriptionRows for the no-double-count
+          // rule the collector topology demands.
+          BorderSurface {
+            id: globalUsageCard
+            visible: globalModelSection.rows.length > 0 || globalSubSection.rows.length > 0
+            width: parent.width
+            implicitHeight: globalUsageColumn.implicitHeight + globalUsageColumn.y * 2
+            height: implicitHeight
+            color: root.alpha(root.foreground, 0.04)
+            borderSpec: Border.flat(root.alpha(root.foreground, 0.15), 1)
+            radius: Style.cornerRadius
+
+            Column {
+              id: globalUsageColumn
+              x: Style.space(12)
+              y: Style.space(12)
+              width: parent.width - Style.space(24)
+              spacing: Style.space(12)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "USAGE — BY SUBSCRIPTION"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
               Column {
                 id: globalModelSection
                 visible: rows.length > 0
@@ -1063,7 +1107,7 @@ Panel {
 
                 PanelSectionHeader {
                   width: parent.width
-                  text: "ALL AGENTS — BY MODEL"
+                  text: "BY MODEL"
                   foreground: root.foreground
                   fontFamily: root.fontFamily
                 }
@@ -1090,7 +1134,7 @@ Panel {
 
                 PanelSectionHeader {
                   width: parent.width
-                  text: "ALL AGENTS — BY SUBSCRIPTION"
+                  text: "BY SUBSCRIPTION"
                   foreground: root.foreground
                   fontFamily: root.fontFamily
                 }
@@ -1106,22 +1150,6 @@ Panel {
                   }
                 }
               }
-
-              // ---------- Installed, never used ----------
-              // Machine state, not this agent's — the discovery record,
-              // not root.agent, so the line never changes with the
-              // selected tab. Unobtrusive on purpose: a caption, not a row.
-              Text {
-                textFormat: Text.PlainText
-                visible: text !== ""
-                width: parent.width
-                text: root.installedUnusedText()
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-              }
-
             }
           }
 
