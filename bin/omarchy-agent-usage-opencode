@@ -125,6 +125,8 @@ def scan():
     total_prompts = 0
     usage_by_model = {}
     usage_by_subscription = {}
+    usage_by_recent_model = {}
+    usage_by_recent_subscription = {}
     today_by_subscription = {}
 
     if DB_PATH.is_file():
@@ -180,6 +182,25 @@ def scan():
 
                 if day in recent:
                     recent[day]["messageCount"] += total
+                    # Same window split by model/subscription: the agent
+                    # card's model and PER SUBSCRIPTION sections are 7-day
+                    # scoped (user decision 2026-09-18) and read these.
+                    recent_model = usage_by_recent_model.setdefault(model, {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "cacheReadInputTokens": 0,
+                        "cacheCreationInputTokens": 0,
+                    })
+                    recent_model["inputTokens"] += input_t
+                    recent_model["outputTokens"] += output_t
+                    recent_model["cacheReadInputTokens"] += read_t
+                    recent_model["cacheCreationInputTokens"] += write_t
+                    recent_sub = usage_by_recent_subscription.setdefault(
+                        service_for(str(data.get("providerID") or "")), empty_sub_bucket())
+                    recent_sub["inputTokens"] += input_t
+                    recent_sub["outputTokens"] += output_t
+                    recent_sub["cacheReadInputTokens"] += read_t
+                    recent_sub["cacheCreationInputTokens"] += write_t
                 if day == today:
                     today_prompts += 1
                     today_sessions.add(session_id)
@@ -212,6 +233,8 @@ def scan():
         "activeDates": sorted(d for d in active_days if d),
         "modelUsage": usage_by_model,
         "subscriptionUsage": usage_by_subscription,
+        "recentModelUsage": usage_by_recent_model,
+        "recentSubscriptionUsage": usage_by_recent_subscription,
         "todaySubscriptionUsage": today_by_subscription,
     }
 

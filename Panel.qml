@@ -344,14 +344,24 @@ Panel {
     return peak
   }
 
-  // Which subscriptions this agent's tokens burned, heaviest first.
-  // Collectors map provider ids to service-tab ids; unmapped ids show
-  // as-is. Buckets carry modelUsage's shape so rows and tooltips render
-  // identically.
+  // Which subscriptions this agent's tokens burned, heaviest first -
+  // in the last 7 days (user decision 2026-09-18): the record's
+  // recentSubscriptionUsage when the collector writes it, else the same
+  // single-subscription synthesis attributionFor does, on the recent
+  // model buckets (claude/codex burn exactly one subscription by
+  // definition). A record with neither recent field shows no rows: an
+  // agent whose collector cannot scope by recency shows its week in the
+  // day chart only, never all-time numbers pretending to be the week.
   function subscriptionRows(p) {
-    var usageBySub = p ? (p.subscriptionUsage || {}) : {}
+    var usageBySub = null
+    if (p) {
+      if (p.recentSubscriptionUsage !== undefined)
+        usageBySub = p.recentSubscriptionUsage
+      else if (String(p.providerId) === "claude" || String(p.providerId) === "codex")
+        usageBySub = synthesizedRecentAttribution(p)
+    }
     var rows = []
-    for (var id in usageBySub) {
+    for (var id in (usageBySub || {})) {
       var bucket = usageBySub[id] || {}
       var input = Number(bucket.inputTokens || 0)
       var output = Number(bucket.outputTokens || 0)
@@ -436,8 +446,38 @@ Panel {
     return total
   }
 
+  // The 7-day analogue of Main.qml's all-time attribution synthesis:
+  // claude/codex burn exactly one subscription by definition, so their
+  // recent PER SUBSCRIPTION rows are the recentModelUsage buckets summed
+  // under their own service id. Null when there is nothing to sum from.
+  function synthesizedRecentAttribution(p) {
+    if (!p || p.recentModelUsage === undefined) return null
+    var usageByModel = p.recentModelUsage || {}
+    var input = 0, output = 0, cacheRead = 0, cacheWrite = 0
+    for (var id in usageByModel) {
+      var bucket = usageByModel[id] || {}
+      input += Number(bucket.inputTokens || 0)
+      output += Number(bucket.outputTokens || 0)
+      cacheRead += Number(bucket.cacheReadInputTokens || 0)
+      cacheWrite += Number(bucket.cacheCreationInputTokens || 0)
+    }
+    if (input + output + cacheRead + cacheWrite <= 0) return null
+    var bucket = {
+      inputTokens: input, outputTokens: output,
+      cacheReadInputTokens: cacheRead, cacheCreationInputTokens: cacheWrite
+    }
+    var result = {}
+    result[String(p.providerId)] = bucket
+    return result
+  }
+
+  // Tokens by model in the last 7 days (user decision 2026-09-18): the
+  // record's recentModelUsage - the same window TOKENS BY DAY charts.
+  // Undefined (a collector that cannot scope by recency, or a synced
+  // snapshot from before the field existed) renders no rows rather than
+  // all-time numbers dressed as the week.
   function modelRows(p) {
-    var usageByModel = p ? (p.modelUsage || {}) : {}
+    var usageByModel = p && p.recentModelUsage !== undefined ? p.recentModelUsage : {}
     var rows = []
     for (var id in usageByModel) {
       var bucket = usageByModel[id] || {}

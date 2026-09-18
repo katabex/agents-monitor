@@ -129,6 +129,8 @@ def scan():
     total_prompts = 0
     usage_by_model = {}
     usage_by_subscription = {}
+    usage_by_recent_model = {}
+    usage_by_recent_subscription = {}
     today_by_subscription = {}
 
     for root in SESSION_ROOTS:
@@ -187,6 +189,21 @@ def scan():
 
                         if day in recent:
                             recent[day]["messageCount"] += sum_tokens
+                            # The same window, split by model and by
+                            # subscription: the agent card's TOKENS BY MODEL
+                            # and PER SUBSCRIPTION sections are 7-day
+                            # scoped (user decision 2026-09-18) and read
+                            # these buckets, not the all-time ones above.
+                            recent_model = usage_by_recent_model.setdefault(model, empty_bucket())
+                            recent_model["inputTokens"] += input_tokens
+                            recent_model["outputTokens"] += output_tokens
+                            recent_model["cacheReadInputTokens"] += cache_read
+                            recent_model["cacheCreationInputTokens"] += cache_write
+                            recent_sub = usage_by_recent_subscription.setdefault(service_for(provider), empty_bucket())
+                            recent_sub["inputTokens"] += input_tokens
+                            recent_sub["outputTokens"] += output_tokens
+                            recent_sub["cacheReadInputTokens"] += cache_read
+                            recent_sub["cacheCreationInputTokens"] += cache_write
                         if day == today:
                             today_prompts += 1
                             today_sessions.add(str(path))
@@ -219,6 +236,8 @@ def scan():
         "activeDates": sorted(d for d in active_days if d),
         "modelUsage": usage_by_model,
         "subscriptionUsage": usage_by_subscription,
+        "recentModelUsage": usage_by_recent_model,
+        "recentSubscriptionUsage": usage_by_recent_subscription,
         "todaySubscriptionUsage": today_by_subscription,
     }
 

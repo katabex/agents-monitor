@@ -273,6 +273,36 @@ Item {
     return true
   }
 
+  // Session memory of the last explicit 7-day breakdown per provider id,
+  // same defense as configuredMemo: the stock updater rewrites claude/
+  // codex records without the recent fields, and the runner's recent-stats
+  // pass re-stamps them moments later - the memo holds the last explicit
+  // value through that gap so the sections don't flash away on refresh.
+  property var recentMemo: ({})
+
+  function resolvedRecentModel(record) {
+    var id = String(record.id || "")
+    if (record.recentModelUsage !== undefined) {
+      recentMemo[id] = { model: record.recentModelUsage || ({}) }
+      return recentMemo[id].model
+    }
+    if (recentMemo[id] !== undefined) return recentMemo[id].model
+    return undefined
+  }
+
+  function resolvedRecentSubscription(record) {
+    var id = String(record.id || "")
+    if (record.recentSubscriptionUsage !== undefined) {
+      var memo = recentMemo[id] || {}
+      memo.subscription = record.recentSubscriptionUsage || ({})
+      recentMemo[id] = memo
+      return memo.subscription
+    }
+    if (recentMemo[id] !== undefined && recentMemo[id].subscription !== undefined)
+      return recentMemo[id].subscription
+    return undefined
+  }
+
   function displayProvider(record) {
     var stats = syncedStatsFor(String(record.id))
     var synced = !!stats
@@ -308,6 +338,17 @@ Item {
       totalSessions: synced ? numberValue(stats.totalSessions) : numberValue(record.totalSessions),
       activeDays: synced ? numberValue(stats.activeDays) : numberValue(record.activeDays),
       modelUsage: synced ? (stats.modelUsage || ({})) : (record.modelUsage || ({})),
+      // 7-day model/subscription breakdowns for the agent card's TOKENS
+      // BY MODEL and PER SUBSCRIPTION sections (user decision
+      // 2026-09-18): local records carry them when their collector (or the
+      // runner's recent-stats pass, for the stock-owned claude/codex)
+      // computed them; synced providers get the fleet-wide additive merge
+      // below. Undefined = recency unknown - the panel hides the sections
+      // rather than show all-time numbers as the week. The resolved*
+      // memoization keeps a stock rewrite's field-less moment from
+      // flashing the sections off.
+      recentModelUsage: synced ? stats.recentModelUsage : resolvedRecentModel(record),
+      recentSubscriptionUsage: synced ? stats.recentSubscriptionUsage : resolvedRecentSubscription(record),
       // Per-app credit burn (openrouter today): device-local only for
       // now — the cross-device snapshot/aggregate pipeline below doesn't
       // carry it, so a synced view falls back to empty rather than merge.
@@ -700,6 +741,29 @@ Item {
           if (!bucket) bucket = acc.modelUsage[modelId] = emptyTokenBucket()
           combineObjectNumbers(additive, bucket, usage[modelId] || {})
         }
+
+        // 7-day breakdowns (device-burned tokens, always additive; each
+        // device's window is its own last 7 days, and summing windows that
+        // sample the same days at slightly different times is the union -
+        // every token counted once, by the device that burned it).
+        var recentModels = stats.recentModelUsage
+        if (recentModels) {
+          if (!acc.recentModelUsage) acc.recentModelUsage = ({})
+          for (var rmId in recentModels) {
+            var rmBucket = acc.recentModelUsage[rmId]
+            if (!rmBucket) rmBucket = acc.recentModelUsage[rmId] = emptyTokenBucket()
+            combineObjectNumbers(additive, rmBucket, recentModels[rmId] || {})
+          }
+        }
+        var recentSubs = stats.recentSubscriptionUsage
+        if (recentSubs) {
+          if (!acc.recentSubscriptionUsage) acc.recentSubscriptionUsage = ({})
+          for (var rsId in recentSubs) {
+            var rsBucket = acc.recentSubscriptionUsage[rsId]
+            if (!rsBucket) rsBucket = acc.recentSubscriptionUsage[rsId] = emptyTokenBucket()
+            combineObjectNumbers(additive, rsBucket, recentSubs[rsId] || {})
+          }
+        }
       }
     }
 
@@ -724,6 +788,8 @@ Item {
         totalSessions: acc.totalSessions,
         activeDays: Math.max(acc.activeDays, Object.keys(acc.activeDates).length),
         modelUsage: acc.modelUsage,
+        recentModelUsage: acc.recentModelUsage || ({}),
+        recentSubscriptionUsage: acc.recentSubscriptionUsage || ({}),
         deviceCount: providerDevices.length,
         devices: providerDevices
       }
@@ -758,7 +824,11 @@ Item {
       totalSessions: numberValue(record.totalSessions),
       activeDays: numberValue(record.activeDays),
       activeDates: cloneValue(record.activeDates, []),
-      modelUsage: cloneValue(record.modelUsage, ({}))
+      modelUsage: cloneValue(record.modelUsage, ({})),
+      // The 7-day breakdowns travel like the stats they split: each
+      // device's window sums to the fleet's week (see aggregateSnapshots).
+      recentModelUsage: cloneValue(record.recentModelUsage, undefined),
+      recentSubscriptionUsage: cloneValue(record.recentSubscriptionUsage, undefined)
     }
   }
 

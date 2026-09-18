@@ -86,3 +86,9 @@ shopt -u nullglob
 # otherwise leave a stale record). zai stamps itself: it also runs from
 # its own systemd timer, outside this runner.
 "$script_dir/agents-monitor-config-check" || true
+
+# 7-day model/subscription breakdowns for the stock-owned records: the
+# stock rewriters know nothing of the recent* fields, so this pass
+# re-stamps them after every stock write (limits-only included - it is a
+# sub-second local scan, no network). Bundled collectors stamp their own.
+"$script_dir/agents-monitor-recent-stats" >/dev/null || true

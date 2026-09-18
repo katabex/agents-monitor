@@ -40,8 +40,7 @@ Hermes — an agent idle for a week leaves the strip until its next token
 switching independently. Both strips are ordered by use, most used
 first (user decision 2026-09-17). The agent strip ranks by the same
 7-day window that admits a tab (recentDays summed): the strip never
-disagrees with the day chart it selects into. The subscription strip
-ranks by each subscription's total use: the larger of its agents'
+disagrees with the day chart it selects into. The subscription stripranks by each subscription's total use: the larger of its agents'
 attributed token total (`subscriptionUsage`, summed across agents -
 the same numbers PER SUBSCRIPTION renders) and its own record's
 all-time token total (authoritative account analytics for
@@ -172,6 +171,16 @@ was reduced to level + reset.
   timer runs outside the runner): no key at all → `configured: false`, a
   record the panel hides (never configured here); a key that cannot
   reach the API keeps the failure pairing and its urgent remedy tab
+- `bin/agents-monitor-recent-stats` — not a collector (name outside
+  the glob): stamps `recentModelUsage` into the stock-owned claude/codex
+  records after every runner pass (limits-only included; sub-second
+  local scan). Mirrors the stock collectors' own message extraction
+  line for line over the very stores they read (~/.claude/projects,
+  ~/.codex sessions, pi/omp sessions and the opencode db for openai
+  burn) with a 7-day local-day filter, and cross-checks its sums
+  against the record's own recentDays (mismatches print to stderr).
+  The panel synthesizes claude/codex recent PER SUBSCRIPTION
+  attribution from it, exactly as it synthesizes the all-time side
 - `bin/agents-monitor-config-check` — not a collector (the name sits
   outside the `omarchy-agent-usage-*` glob on purpose): stamps
   `configured` (machine-local credential presence, mirroring each

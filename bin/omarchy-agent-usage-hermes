@@ -135,6 +135,8 @@ def scan():
     active_days = set()
     usage_by_model = {}
     usage_by_subscription = {}
+    usage_by_recent_model = {}
+    usage_by_recent_subscription = {}
     today_by_model = {}
     today_by_subscription = {}
     today_sessions = set()
@@ -169,6 +171,14 @@ def scan():
                        input_t, output_t, read_t, write_t)
             if day in recent:
                 recent[day]["messageCount"] += total
+                # Same window split by model/subscription: the agent card's
+                # model and PER SUBSCRIPTION sections are 7-day scoped
+                # (user decision 2026-09-18) and read these.
+                add_tokens(usage_by_recent_model.setdefault(model, empty_bucket()),
+                           input_t, output_t, read_t, write_t)
+                add_tokens(usage_by_recent_subscription.setdefault(
+                               service_for(provider), empty_bucket()),
+                           input_t, output_t, read_t, write_t)
             if day == today:
                 today_sessions.add(session_id)
                 today_total += total
@@ -208,6 +218,8 @@ def scan():
         "activeDates": sorted(active_days),
         "modelUsage": usage_by_model,
         "subscriptionUsage": usage_by_subscription,
+        "recentModelUsage": usage_by_recent_model,
+        "recentSubscriptionUsage": usage_by_recent_subscription,
         "todaySubscriptionUsage": today_by_subscription,
     }
 
