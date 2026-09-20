@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "ptr.agents-monitor",
+  "id": "katabex.agents-monitor",
   "name": "Agents Monitor",
   "version": "0.14.2",
-  "author": "ptr",
+  "author": "katabex",
   "license": "MIT",
   "description": "Claude Code, Codex, Copilot, Fireworks, pi, OpenCode, Z.ai GLM Coding Plan quota, OpenRouter credit usage, and Hermes usage, limits, and pace in an Omarchy bar panel. Fork of the stock omarchy.agents widget with built-in pi, OpenCode, Z.ai, and OpenRouter collection.",
   "kinds": [
