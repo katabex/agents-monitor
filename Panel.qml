@@ -68,7 +68,9 @@ Panel {
       // rows alone no longer admit an agent - a tool idle for a week
       // leaves the strip (its record stays in the usage dir; the first
       // token it burns brings the tab back), and activity-only records
-      // (discovery MVPs, copilot's token-less store) stay out too.
+      // (discovery MVPs) stay out too - copilot used to be one of these
+      // until its 1.0.88 upgrade started filling recentDays for real
+      // (2026-09-23).
       if (has) result.push(p)
     }
     // Most used first (user decision 2026-09-17): the same 7-day window
@@ -500,9 +502,14 @@ Panel {
   //                   gap, not a live one, and cheaper to flag than to
   //                   chase: model ids alone don't carry a subscription
   //                   tag to filter by).
+  //   copilot         burns exactly one subscription by definition (no
+  //                   compat-gateway routing), never scanned by any
+  //                   other collector - its own "copilot" subscription
+  //                   key is synthesized in its own collector, added
+  //                   wholesale like claude/codex's panel-side synthesis.
   function globalModelRows() {
     var totals = {}
-    var ids = ["claude", "codex", "pi", "opencode", "hermes"]
+    var ids = ["claude", "codex", "pi", "opencode", "hermes", "copilot"]
     for (var i = 0; i < ids.length; i++) {
       var p = providerById(ids[i])
       var usageByModel = p && p.recentModelUsage !== undefined ? p.recentModelUsage : {}
@@ -545,6 +552,8 @@ Panel {
     for (var pk in piSub) add(pk, piSub[pk])
     var hermesSub = (providerById("hermes") || {}).recentSubscriptionUsage || {}
     for (var hk in hermesSub) add(hk, hermesSub[hk])
+    var copilotSub = (providerById("copilot") || {}).recentSubscriptionUsage || {}
+    for (var cpk in copilotSub) add(cpk, copilotSub[cpk])
     var opencodeSub = (providerById("opencode") || {}).recentSubscriptionUsage || {}
     for (var ok in opencodeSub) {
       if (ok === "claude" || ok === "codex") continue  // already counted above; see the comment on globalModelRows
