@@ -36,6 +36,15 @@ subscriptionUsage/recentSubscriptionUsage bucket everything under its
 own id "copilot" - the same synthesis claude/codex get from the panel,
 done here directly since this collector owns its own record.
 
+Premium usage (subscription-level meter): GitHub meters Copilot in
+premium-request units, and the store's total_nano_aiu column carries
+each call's consumption in nano-units. No local source exposes the
+plan's allowance (not config.json, settings.json, nor the logs - all
+checked 2026-09-23), so the record reports consumption only, for the
+current local calendar month: the panel renders it as a meterless row
+on the SUBSCRIPTION card rather than inventing a percentage or a reset
+date it cannot know.
+
 Prompt/session/activeDays counting is unchanged: turns with a non-empty
 user_message, exactly as before the token upgrade - that is a real
 "did I use this" signal independent of whether the usage table happens
@@ -60,7 +69,8 @@ DB_PATH = Path.home() / ".copilot" / "session-store.db"
 
 USAGE_SQL = """
 select id, session_id, model, input_tokens, output_tokens,
-       reasoning_tokens, cache_read_tokens, cache_write_tokens, created_at
+       reasoning_tokens, cache_read_tokens, cache_write_tokens, created_at,
+       total_nano_aiu
 from assistant_usage_events
 order by id
 """
@@ -120,6 +130,9 @@ def scan():
     today_tokens_by_model = {}
     today_total_tokens = 0
     seen_events = set()
+    month_start = datetime.now().strftime("%Y-%m-01")
+    premium_units = 0.0
+    premium_requests = 0
 
     connection = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     try:
@@ -139,7 +152,7 @@ def scan():
                 today_sessions.add(session_id)
 
         for (event_id, session_id, model, input_raw, output_raw,
-             reasoning_raw, read_raw, write_raw, created_at) in connection.execute(USAGE_SQL):
+             reasoning_raw, read_raw, write_raw, created_at, nano_aiu) in connection.execute(USAGE_SQL):
             # De-dup by everything except the autoincrement id: 1.0.88
             # emits exact-duplicate rows for a small fraction of calls.
             dedup_key = (session_id, model, input_raw, output_raw,
@@ -164,6 +177,10 @@ def scan():
             active_days.add(day)
             add_tokens(usage_by_model.setdefault(model_name, empty_bucket()),
                        input_t, output_t, read_t, write_t)
+            # ISO date strings compare correctly as plain strings.
+            if day >= month_start:
+                premium_units += number(nano_aiu) / 1_000_000_000
+                premium_requests += 1
             if day in recent:
                 recent[day]["messageCount"] += total
                 add_tokens(usage_by_recent_model.setdefault(model_name, empty_bucket()),
@@ -184,6 +201,10 @@ def scan():
     subscription_usage = {"copilot": subscription_bucket(usage_by_model)} if usage_by_model else {}
     recent_subscription_usage = {"copilot": subscription_bucket(usage_by_recent_model)} if usage_by_recent_model else {}
     today_subscription_usage = {"copilot": today_total_tokens} if today_total_tokens > 0 else {}
+    premium_usage = (
+        {"since": month_start, "units": round(premium_units, 1), "requests": premium_requests}
+        if premium_requests > 0 else None
+    )
 
     return {
         "schemaVersion": 1,
@@ -211,6 +232,7 @@ def scan():
         "subscriptionUsage": subscription_usage,
         "recentSubscriptionUsage": recent_subscription_usage,
         "todaySubscriptionUsage": today_subscription_usage,
+        "premiumUsage": premium_usage,
     }
 
 

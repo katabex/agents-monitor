@@ -27,7 +27,10 @@ Panel {
   // local stats), pi and opencode agent-only, and the two cards switch
   // independently. A limits-only record with a dead probe and no rows yet
   // still earns the service tab via the urgent status+help pairing - that
-  // pairing exists to be shown, not to be gated out. A subscription that
+  // pairing exists to be shown, not to be gated out. A record carrying
+  // premiumUsage (copilot: premium-request consumption with no locally
+  // knowable allowance) earns the service tab too - shown as a meterless
+  // consumption row, never a faked level. A subscription that
   // is not configured on this machine (configured === false - credentials
   // absent, per the collectors and the runner's config-check) earns no
   // tab at all (user decision 2026-09-17): it has no level or reset to
@@ -38,7 +41,7 @@ Panel {
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i]
       if (p.configured === false) continue
-      if ((p.limits && p.limits.length > 0) || p.balance
+      if ((p.limits && p.limits.length > 0) || p.balance || p.premiumUsage
           || (String(p.usageStatusText || "") !== "" && String(p.authHelpText || "") !== ""))
         result.push(p)
     }
@@ -985,6 +988,64 @@ Panel {
                     width: levelSection.width
                     window: modelData
                   }
+                }
+              }
+
+              // ---------- Premium usage ----------
+              // A subscription metered in premium-request units whose
+              // allowance no local source exposes (copilot: consumption
+              // only, from the store's nano-AIU column). Meterless on
+              // purpose: a percent would need a denominator nobody here
+              // knows, and a reset countdown would need a billing date -
+              // the caption says what the number is instead.
+              Column {
+                id: premiumSection
+                visible: !!root.service && !!root.service.premiumUsage
+                width: parent.width
+                spacing: Style.space(6)
+
+                readonly property var premium: root.service ? root.service.premiumUsage : null
+
+                Item {
+                  width: parent.width
+                  implicitHeight: Math.max(premiumLabel.implicitHeight, premiumValue.implicitHeight)
+
+                  Text {
+                    id: premiumLabel
+                    text: "Premium requests"
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+
+                  Text {
+                    id: premiumValue
+                    textFormat: Text.PlainText
+                    text: premiumSection.premium
+                      ? Number(premiumSection.premium.units || 0).toFixed(1) + " units"
+                      : ""
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  width: parent.width
+                  text: premiumSection.premium
+                    ? Number(premiumSection.premium.requests || 0) + " requests since "
+                      + String(premiumSection.premium.since || "")
+                      + " - Copilot CLI exposes no quota or reset date"
+                    : ""
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
                 }
               }
 

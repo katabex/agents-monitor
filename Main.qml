@@ -353,6 +353,10 @@ Item {
       // now - the cross-device snapshot/aggregate pipeline below doesn't
       // carry it, so a synced view falls back to empty rather than merge.
       appUsage: synced ? (stats.appUsage || ({})) : (record.appUsage || ({})),
+      // Premium-request consumption for the SUBSCRIPTION card (copilot
+      // today): consumption only, no allowance - device-local like
+      // appUsage (the sync pipeline doesn't carry it).
+      premiumUsage: synced ? stats.premiumUsage : (record.premiumUsage || undefined),
       // Installed-but-unused catalog labels (the discovery record only):
       // machine state, not stats - device-local like appUsage, same
       // reason (the sync pipeline below doesn't carry it).
