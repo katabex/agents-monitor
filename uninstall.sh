@@ -5,8 +5,10 @@
 
 set -euo pipefail
 
-DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
+DEST="$HOME/.config/omarchy/plugins/katabex.agents-monitor"
+OLD_DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
 
+omarchy plugin disable katabex.agents-monitor 2>/dev/null || true
 omarchy plugin disable ptr.agents-monitor 2>/dev/null || true
 omarchy plugin enable omarchy.agents --after omarchy.tailscale
 
@@ -37,6 +39,14 @@ if [[ -L $DEST ]]; then
   rm "$DEST"
 elif [[ -d $DEST ]]; then
   rm -rf "$DEST"
+fi
+
+# Pre-2026-09-20 installs deployed under the old id/directory name; clean
+# that up too so a stale copy doesn't linger.
+if [[ -L $OLD_DEST ]]; then
+  rm "$OLD_DEST"
+elif [[ -d $OLD_DEST ]]; then
+  rm -rf "$OLD_DEST"
 fi
 
 echo "==> Uninstalled; stock omarchy.agents restored."

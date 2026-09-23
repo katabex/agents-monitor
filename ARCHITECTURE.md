@@ -121,6 +121,23 @@ Re-run `./install.sh`.
 It ends with `omarchy restart shell` because the shell's "Local plugin changed, reloading" path re-instantiates **cached** QML components - changed QML does not take effect on hot-reload alone.
 Data-file changes (`pi.json`) of course apply without any restart.
 
+omarchy's plugin registry keys entries by the manifest's `id` field, not
+the deployed directory name (`install.sh`/`uninstall.sh` deploy to
+`~/.config/omarchy/plugins/<id>`, matching by convention, not
+necessity).
+A manifest `id` rename (`ptr.agents-monitor` -> `katabex.agents-monitor`,
+2026-09-20) without updating the `omarchy plugin enable/disable` calls
+to match left the widget registered under the new id but the install
+scripts still addressing the old one - `omarchy plugin enable
+ptr.agents-monitor` failed with "plugin ... is not known", silently
+leaving the widget disabled after a routine redeploy (caught live
+2026-09-23).
+`install.sh` now also migrates a leftover old-named directory out of the
+way on the next run.
+If the manifest `id` ever changes again, grep the repo for the old id
+string - `install.sh`, `uninstall.sh`, and both systemd unit files'
+`ExecStart` all hardcode it.
+
 ## Re-syncing with upstream
 
 The QML is a fork of `/usr/share/omarchy/shell/plugins/agents/`.

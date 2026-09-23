@@ -13,4 +13,4 @@ Description=pi agent usage collector for the Agents Monitor panel
 
 [Service]
 Type=oneshot
-ExecStart=%h/.config/omarchy/plugins/ptr.agents-monitor/bin/omarchy-agent-usage-pi --write
+ExecStart=%h/.config/omarchy/plugins/katabex.agents-monitor/bin/omarchy-agent-usage-pi --write

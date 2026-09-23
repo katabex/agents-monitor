@@ -23,7 +23,21 @@
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
+DEST="$HOME/.config/omarchy/plugins/katabex.agents-monitor"
+
+# Manifest rename (2026-09-20): id/author moved from ptr.agents-monitor
+# to katabex.agents-monitor, but omarchy's plugin registry keys entries
+# by the manifest's own "id" field, not the directory name - an install
+# still deployed under the old directory registers as "unknown" to
+# `omarchy plugin enable/disable katabex.agents-monitor` (caught live
+# 2026-09-23: the widget silently sat disabled after a routine
+# redeploy). Migrate a leftover old-named directory out of the way
+# rather than leaving two copies confusing future installs.
+OLD_DEST="$HOME/.config/omarchy/plugins/ptr.agents-monitor"
+if [[ -d "$OLD_DEST" && "$OLD_DEST" != "$DEST" ]]; then
+  rm -rf "$OLD_DEST"
+  echo "==> Removed stale $OLD_DEST (renamed to katabex.agents-monitor)"
+fi
 
 rm -rf "$DEST"
 mkdir -p "$DEST"
@@ -37,7 +51,8 @@ omarchy plugin validate "$DEST"
 # Replace the stock widget: off with the old, on with the new, same spot
 # (right section, between omarchy.tailscale and omarchy.bluetooth).
 omarchy plugin disable omarchy.agents
-omarchy plugin enable ptr.agents-monitor --after omarchy.tailscale
+omarchy plugin disable ptr.agents-monitor 2>/dev/null || true
+omarchy plugin enable katabex.agents-monitor --after omarchy.tailscale
 
 # Upgrade cleanup ≤ v0.4.3: the quota timer shipped as
 # omarchy-opencode-usage before the probe moved to its own zai collector.

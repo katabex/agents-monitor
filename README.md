@@ -31,7 +31,7 @@ Claude Code, Codex, OpenCode, pi, and Hermes need no configuration beyond having
 ./install.sh
 ```
 
-Copies the plugin into `~/.config/omarchy/plugins/ptr.agents-monitor` and puts it in the bar in place of the stock `omarchy.agents` widget.
+Copies the plugin into `~/.config/omarchy/plugins/katabex.agents-monitor` and puts it in the bar in place of the stock `omarchy.agents` widget.
 Re-run any time to pick up repo changes.
 
 ## Uninstall
