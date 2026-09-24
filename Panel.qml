@@ -606,9 +606,11 @@ Panel {
     return "Installed, never used here: " + list.join(" · ")
   }
 
-  // Agents that ship a white mark carry an `assets/<id>-light.svg` twin for
-  // light surfaces; marks that work on both (Claude's brand-orange) ship one
-  // file. The luminance check decides which candidate to try first.
+  // Every mark ships a white `assets/<id>.svg` plus an
+  // `assets/<id>-light.svg` black twin for light surfaces (Claude's used
+  // to be a single brand-orange file that worked on both - monochrome
+  // pair since 2026-09-23, per user decision, matching every other
+  // mark). The luminance check decides which candidate to try first.
   function colorChannelLuminance(value) {
     var channel = Number(value)
     if (!isFinite(channel)) return 0
