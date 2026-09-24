@@ -1,15 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="19 19 442 442">
-  <!-- Z.ai mark, traced monochrome from https://z-cdn.chatglm.cn/z-ai/static/logo.svg
-       (2026-09-11); see also zai-light for light surfaces. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="87 108 305 263">
+  <!-- Z.ai mark: just the Z letterform, the rounded-square frame
+       removed (user decision 2026-09-23). The Z strokes are
+       unmodified geometry from the traced official logo
+       (z-cdn.chatglm.cn/z-ai/static/logo.svg, 2026-09-11);
+       viewBox re-tightened to the Z's own bounding box. See
+       also zai-light for light surfaces. -->
   <g transform="translate(0,480) scale(0.1,-0.1)" fill="#ffffff" stroke="none">
-    <path d="M760 4603 c-242 -40 -460 -232 -542 -478 l-23 -70 0 -1655 0 -1655
-23 -70 c72 -214 227 -373 442 -452 l75 -28 1660 0 1660 0 70 23 c226 75 409
-267 465 488 31 121 31 3267 0 3388 -50 195 -183 357 -366 447 -150 73 -38 69
--1829 67 -885 0 -1621 -3 -1635 -5z m3304 -113 c212 -54 383 -226 431 -433 14
--59 15 -259 13 -1684 l-3 -1618 -26 -66 c-79 -204 -236 -342 -434 -384 -105
--22 -3185 -22 -3290 0 -221 46 -404 229 -450 450 -13 60 -15 299 -15 1651 0
-1542 0 1583 20 1658 55 215 228 385 440 430 54 12 331 15 1651 15 1548 1 1588
-1 1663 -19z M990 3480 l0 -190 583 0 583 0 44 23 c38 18 63 48 157 181 62 88
+    <path d="M990 3480 l0 -190 583 0 583 0 44 23 c38 18 63 48 157 181 62 88
 113 163 113 168 0 4 -333 8 -740 8 l-740 0 0 -190z M2642 3588 c-492 -695
 -1713 -2430 -1718 -2442 -6 -15 47 -16 587 -14 l593 3 888 1258 c488 692 888
 1262 888 1267 0 6 -219 10 -590 10 l-589 0 -59 -82z M2602 1489 c-36 -18 -62
