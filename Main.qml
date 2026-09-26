@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Commons
 
 // The display side of agent usage. All extraction lives behind
 // omarchy-agent-usage-update, which writes one JSON record per agent into
@@ -116,6 +117,54 @@ Item {
   Component.onCompleted: {
     rescanAgents()
     if (syncConfigured()) scheduleSync()
+  }
+
+  // --------------------------------------------------------------- theme
+  //
+  // The widget follows the shell's palette through the shared Color
+  // singleton, which loads current/theme at startup only; runtime theme
+  // switches arrive as an IPC push (omarchy theme set -> shell applyTheme
+  // -> Color.loadColors/loadShell). When the shell's IPC socket is wedged
+  // - the "omarchy-shell is not responding" state this machine repeatedly
+  // enters under plugin churn - that push fails silently: the CLI writes
+  // the new theme files, times out after 2 s, and gives up (|| true), so
+  // every shell surface keeps the old palette while terminals and other
+  // apps recolor on their own tracks. Watch the theme files here and push
+  // them into the same singleton through the same public loaders
+  // applyTheme uses: a no-op re-parse when the IPC worked, a live
+  // whole-shell recolor when it didn't. `current/theme` is a real
+  // directory whose files are rewritten in place on a switch, so the
+  // watchers fire; pushThemeFiles() (called on every panel open) is the
+  // fallback that always re-resolves, in case a rewrite slips past the
+  // watcher.
+  FileView {
+    id: themeColorsWatch
+    path: Color.currentThemePath + "/colors.toml"
+    watchChanges: true
+    printErrors: false
+    // text() is stale inside the change signal itself; route every path
+    // through reload -> onLoaded so the push always parses fresh content
+    // (the same discipline Color.qml's own watched files use).
+    onFileChanged: reload()
+    onLoaded: Color.loadColors(text())
+  }
+
+  FileView {
+    id: themeShellWatch
+    path: Color.currentThemePath + "/shell.toml"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      Color.loadShell(text())
+      Style.scheduleRefresh()
+    }
+    onLoadFailed: Color.loadShell("")
+  }
+
+  function pushThemeFiles() {
+    themeColorsWatch.reload()
+    themeShellWatch.reload()
   }
 
   // -------------------------------------------------------------- refresh

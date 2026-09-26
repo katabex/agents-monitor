@@ -664,6 +664,7 @@ Panel {
     nowMs = Date.now()
     if (panelFlick) panelFlick.contentY = 0
     usage.refreshLimits()
+    usage.pushThemeFiles()  // theme-follow insurance; see Main.qml
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 

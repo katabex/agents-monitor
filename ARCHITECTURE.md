@@ -115,6 +115,15 @@ Upgrading from an older install?
 `./uninstall.sh` removes the obsolete `omarchy-agents-monitor-live` systemd units, or disable them manually (`systemctl --user disable --now omarchy-agents-monitor-live.timer`, then delete `~/.config/systemd/user/omarchy-agents-monitor-live.*`).
 The stale state dir `~/.local/state/omarchy/agents-monitor/` can be deleted too.
 
+## Theme following
+
+The widget reads every color from the shell's shared `Color` singleton (`qs.Commons`), which loads `~/.local/state/omarchy/current/theme` at startup only.
+Runtime switches arrive as an IPC push: `omarchy theme set` rewrites the theme files, then calls `shell applyTheme`, which feeds `Color.loadColors`/`loadShell`.
+When the shell's IPC is wedged ("omarchy-shell is not responding"), that call times out silently (`timeout 2 ... || true`) and the whole shell keeps the old palette.
+`Main.qml` therefore watches `colors.toml` and `shell.toml` itself (`onFileChanged: reload()` -> `onLoaded` pushes into the same singleton loaders), and the panel re-pushes both files on every open.
+The push is a no-op re-parse when the IPC worked and a whole-shell recolor when it didn't.
+Note the bar/popup surfaces take their colors from `shell.toml` roles, not only the `colors.toml` foundation - a test that swaps only one file proves nothing.
+
 ## Deploying changes
 
 Re-run `./install.sh`.
